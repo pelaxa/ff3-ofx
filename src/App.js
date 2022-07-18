@@ -23,6 +23,7 @@ import Stack from '@mui/material/Stack';
 import Chip from '@mui/material/Chip';
 import Tooltip from '@mui/material/Tooltip';
 import { Typography } from '@mui/material';
+import LinearProgress from '@mui/material/LinearProgress';
 
 function App() {
     const [accounts, setAccounts] = useState();
@@ -31,6 +32,7 @@ function App() {
     const [txnIdx, setTxnIdx] = useState(0);
     const [ofxData, setOfxData] = useState();
     const [processed, setProcessed] = useState(false);
+    const [progress, setProgress] = useState(0);
     const ofxParser = require('node-ofx-parser');
 
     const init = async () => {
@@ -72,6 +74,7 @@ function App() {
         setTransactions([]);
         setTxnIdx(0);
         setProcessed(false);
+        setProgress(0);
         reader.readAsText(e.target.files[0]);
     };
 
@@ -95,6 +98,21 @@ function App() {
             };
         }
         return newTransaction;
+    };
+
+    const addAnyways = async existingTxn => {
+        const newTransaction = await addTransaction(existingTxn.importStatus?.ff3Txn);
+
+        if (newTransaction) {
+            existingTxn.importStatus = newTransaction;
+
+            const account = await ApiService.getAccount(selectedAccount.id);
+            if (account) {
+                setSelectedAccount(account);
+            }
+
+            setTransactions(transactions);
+        }
     };
 
     const processTransactions = async () => {
@@ -125,7 +143,8 @@ function App() {
                 ),
                 matchingTransactions = [];
             let proceed = true,
-                exactMatchFound = false;
+                exactMatchFound = false,
+                amountMatchFound = false;
             if (relatedTransactions.length >= 1) {
                 console.log(`Found ${relatedTransactions.length} related transactions`);
                 // Check to see if we have added this transaction already
@@ -145,26 +164,42 @@ function App() {
                         } else if (txn.amount) {
                             const amt = parseFloat(txn.amount);
                             runningTotal += amt;
-                            // TODO: Ran into one case where a deposit matched a withdraw ???
-                            if (
-                                amt === Math.abs(parsedTxn.amount) &&
-                                ((parsedTxn.amount < 0 && txn.source_id === selectedAccount.id) ||
-                                    (parsedTxn.amount >= 0 && txn.destination_id === selectedAccount.id))
-                            ) {
-                                console.log('********** Found AMOUNT match');
-                                matchingTransactions.push(ffTxn);
-                                proceed = false;
-                                // If the description also matches, then it is an exact match
-                                if (parsedTxn.description === txn.description) {
-                                    console.log('********** Found AMOUNT.EXACT match');
-                                    exactMatchFound = true;
-                                    break;
+                            if (amt === Math.abs(parsedTxn.amount)) {
+                                amountMatchFound = true;
+                                if (
+                                    (parsedTxn.amount < 0 && txn.source_id === selectedAccount.id) ||
+                                    (parsedTxn.amount >= 0 && txn.destination_id === selectedAccount.id)
+                                ) {
+                                    console.log('********** Found AMOUNT match');
+                                    console.info(
+                                        '********** Found AMOUNT match, parsedTxn.amount',
+                                        parsedTxn.amount,
+                                        'Source match: ',
+                                        txn.source_id === selectedAccount.id,
+                                        'Dest match: ',
+                                        txn.destination_id === selectedAccount.id,
+                                    );
+
+                                    matchingTransactions.push(ffTxn);
+                                    proceed = false;
+                                    // If the description also matches, then it is an exact match
+                                    if (parsedTxn.description === txn.description) {
+                                        console.log('********** Found AMOUNT.EXACT match');
+                                        exactMatchFound = true;
+                                        break;
+                                    }
                                 }
                             }
                         }
                     }
-                    // Now we check the total and only add it if it is not already in the array
-                    if (runningTotal === parsedTxn.amount && !matchingTransactions.includes(ffTxn)) {
+                    // TODO: what happens if the an amount of a split transaction matches mistakenly???
+                    // It is possible the transaction was split so
+                    // Now we check the total for a match (only if no amount match was found) and only add it if it is not already in the array
+                    if (
+                        !amountMatchFound &&
+                        runningTotal === parsedTxn.amount &&
+                        !matchingTransactions.includes(ffTxn)
+                    ) {
                         console.log('********** Found TOTAL match');
                         matchingTransactions.push(ffTxn);
                         proceed = false;
@@ -221,7 +256,8 @@ function App() {
                 setTransactions([parsedTxn]);
             }
 
-            console.log('Processed Txn', transactions);
+            console.log('Processed Txn', progress, transactions);
+            setProgress((transactions.length / ofxData.transactions.length) * 100);
         } else {
             console.log('Done processing! Updating final account balance...');
             // Update the account balance
@@ -238,6 +274,7 @@ function App() {
 
     const bankBalance = ofxData ? parseFloat(ofxData.balance).toFixed(2) : 0;
     const accountBalance = selectedAccount ? parseFloat(selectedAccount.attributes.current_balance).toFixed(2) : 0;
+    const diff = (bankBalance - accountBalance).toFixed(2);
 
     return (
         <div className="App">
@@ -264,6 +301,20 @@ function App() {
                                         <Tooltip title="Bank Balance">
                                             <Chip icon={<AccountBalanceIcon />} label={`$ ${bankBalance}`} />
                                         </Tooltip>
+                                        {!processed && (
+                                            <Box sx={{ minWidth: 150, mr: 1, alignSelf: 'center' }}>
+                                                <LinearProgress variant="determinate" value={progress} />
+                                            </Box>
+                                        )}
+                                        {processed && (
+                                            <Typography
+                                                variant="h6"
+                                                sx={{ color: `${bankBalance !== accountBalance ? '#f00' : '#090'}` }}
+                                                gutterBottom
+                                                component="div">
+                                                $ {diff}
+                                            </Typography>
+                                        )}
                                         <Tooltip title="Account Balance">
                                             <Chip icon={<SavingsIcon />} label={`$ ${accountBalance}`} />
                                         </Tooltip>
@@ -296,10 +347,8 @@ function App() {
                                                 <TableCell align="center">
                                                     <Button
                                                         variant="text"
-                                                        disabled={transaction.importStatus?.status === 'noop'}
-                                                        onClick={() =>
-                                                            addTransaction(transaction.importStatus?.ff3Txn)
-                                                        }>
+                                                        disabled={transaction.importStatus?.status !== 'noop'}
+                                                        onClick={() => addAnyways(transaction)}>
                                                         <AddIcon /> Add anyways
                                                     </Button>
                                                 </TableCell>
@@ -307,8 +356,14 @@ function App() {
                                             {transaction.importStatus?.status === 'noop' && (
                                                 <TableRow>
                                                     <TableCell colSpan={4} align="center">
-                                                        <Box variant="outlined" sx={{p: 2, border: '1px solid grey', backgroundColor: '#f0f0f0'}}>
-                                                            <Typography variant='h6'>Matching Transactions</Typography>
+                                                        <Box
+                                                            variant="outlined"
+                                                            sx={{
+                                                                p: 2,
+                                                                border: '1px solid grey',
+                                                                backgroundColor: '#f0f0f0',
+                                                            }}>
+                                                            <Typography variant="h6">Matching Transactions</Typography>
                                                             <Table
                                                                 sx={{ width: '100%', alignSelf: 'flex-end' }}
                                                                 aria-label="simple table">

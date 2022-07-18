@@ -50,6 +50,38 @@ class Utils {
         return moment(parseInt(inDate), DATE_FORMAT);
     }
 
+    /**
+     * Parse a single transaction.
+     * TODO: a single transaction may be made up of an array of related transactions.
+     * {
+    "TRNTYPE": [
+        "CREDIT",
+        "CREDIT"
+    ],
+    "DTPOSTED": [
+        "20220630120000",
+        "20220630120000"
+    ],
+    "TRNAMT": [
+        "33.62",
+        "958.02"
+    ],
+    "FITID": [
+        "tNUAsBXin",
+        "tNUAsBXin"
+    ],
+    "NAME": [
+        "Automatic payment/from PCA:991.6",
+        "Automatic payment/from PCA:991.6"
+    ],
+    "MEMO": [
+        "CR",
+        "CR"
+    ]
+}
+     * @param txn 
+     * @returns 
+     */
     static parseOfxTransaction(txn: OfxTransaction): OfxParsedTransaction | null {
         console.log('TXN to parse', txn);
         if (txn) {
