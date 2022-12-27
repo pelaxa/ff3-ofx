@@ -34,6 +34,7 @@ class Utils {
             ofxData.endDate = Utils.ofxDateToFF3(ofxDataIn.OFX.BANKMSGSRSV1.STMTTRNRS.STMTRS.BANKTRANLIST?.DTEND) || '?';
             ofxData.transactions = ofxDataIn.OFX.BANKMSGSRSV1.STMTTRNRS.STMTRS.BANKTRANLIST.STMTTRN;
         } else {
+            // eslint-disable-next-line no-throw-literal
             throw 'OFX format not understood';
         }
 

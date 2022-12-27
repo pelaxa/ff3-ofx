@@ -1,4 +1,4 @@
-import moment, { Moment } from 'moment';
+import { Moment } from 'moment';
 
 export interface OfxTransaction {
     TRNTYPE: string;

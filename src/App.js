@@ -29,7 +29,7 @@ function App() {
     const [accounts, setAccounts] = useState();
     const [selectedAccount, setSelectedAccount] = useState();
     const [transactions, setTransactions] = useState([]);
-    const [txnIdx, setTxnIdx] = useState(0);
+    // const [txnIdx, setTxnIdx] = useState(0);
     const [ofxData, setOfxData] = useState();
     const [processed, setProcessed] = useState(false);
     const [progress, setProgress] = useState(0);
@@ -72,7 +72,7 @@ function App() {
         setOfxData(undefined);
         setSelectedAccount(undefined);
         setTransactions([]);
-        setTxnIdx(0);
+        // setTxnIdx(0);
         setProcessed(false);
         setProgress(0);
         reader.readAsText(e.target.files[0]);
@@ -152,10 +152,12 @@ function App() {
                     let runningTotal = 0;
                     for (const txn of ffTxn.attributes.transactions) {
                         console.log('***** Examining txn', txn);
-                        if (
+                        // First we check for an exact match based on internal or external id.
+                        // parsedTxn.transactionId should be unique but it is not in all cases
+                        if ((
                             (txn.internal_reference && txn.internal_reference === parsedTxn.transactionId) ||
                             (txn.external_id && txn.external_id === parsedTxn.transactionId)
-                        ) {
+                        ) && Math.abs(txn.amount || 0) === Math.abs(parsedTxn.amount || 0)) {
                             proceed = false;
                             exactMatchFound = true;
                             matchingTransactions.push(ffTxn);
