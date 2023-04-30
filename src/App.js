@@ -24,27 +24,39 @@ import Chip from '@mui/material/Chip';
 import Tooltip from '@mui/material/Tooltip';
 import { Typography } from '@mui/material';
 import LinearProgress from '@mui/material/LinearProgress';
+import * as OFXParser from 'node-ofx-parser';
+
+const bgColors = ["#eeeeee",
+    "#cccccc",
+    "#aaaaaa",
+    "#888888",
+    "#666666",
+    "#444444"];
 
 function App() {
+    // List of all accounts
     const [accounts, setAccounts] = useState();
+    // The selected account for which transactions are being processed
     const [selectedAccount, setSelectedAccount] = useState();
+    // These are the procdessed transactions
     const [transactions, setTransactions] = useState([]);
-    // const [txnIdx, setTxnIdx] = useState(0);
+    // ???
     const [ofxData, setOfxData] = useState();
+    // Whether the transaction data has been processed already or not
     const [processed, setProcessed] = useState(false);
+    // The current progress for the transactions being processed
     const [progress, setProgress] = useState(0);
-    const ofxParser = require('node-ofx-parser');
+    const ofxParser = OFXParser;
 
-    const init = async () => {
-        const accntResponse = await ApiService.getAccounts();
-        setAccounts(accntResponse);
-    };
+    console.info('Version: 202304021522')
 
     useEffect(() => {
         if (!accounts) {
+            // If we do not have any accounts fetched, fetch them first
             console.log('calling init...');
             init();
         } else if (ofxData && selectedAccount && !processed) {
+            // If we have a selected account, new data and a selected account, then start processing
             console.log('Start processing...');
             processTransactions();
         } else if (transactions) {
@@ -52,13 +64,21 @@ function App() {
         }
     });
 
+    /**
+     * Fetch the list of accounts
+     */
+    const init = async () => {
+        const accntResponse = await ApiService.getAccounts();
+        setAccounts(accntResponse);
+    };
+
     const showFile = e => {
         e.preventDefault();
         const reader = new FileReader();
         reader.onload = e => {
             const text = e.target.result;
             const parsedData = ofxParser.parse(text);
-            console.log(parsedData);
+            // console.debug(parsedData);
             const tmpOfxData = Utils.getOfxData(parsedData);
             if (accounts?.length > 0) {
                 // Find the account
@@ -69,12 +89,14 @@ function App() {
                 setOfxData(tmpOfxData);
             }
         };
+        // Reset our state before reading the new file
         setOfxData(undefined);
         setSelectedAccount(undefined);
         setTransactions([]);
         // setTxnIdx(0);
         setProcessed(false);
         setProgress(0);
+        // start reading the new file (This will trigger the onload event above)
         reader.readAsText(e.target.files[0]);
     };
 
@@ -118,8 +140,8 @@ function App() {
     const processTransactions = async () => {
         // Process each transaction by
         // 1) searching for a transaction within a +/- 3 day range
-        // 2) comparing to see if a transaction with this amount exists that has a same or different internal reference
-        // 3) if same internal ref, then it must be a match
+        // 2) comparing to see if a transaction with this amount exists that has a same or different external reference
+        // 3) if same external ref, then it must be a match
         // 4) if different internet ref, the it could be a match (prompt the user to choose)
         console.log('ofxData', ofxData, transactions.length, ofxData.transactions, selectedAccount);
 
@@ -131,29 +153,29 @@ function App() {
             // Import tag used to identify the import
             const importTag = `OFX Import ${new Date().toJSON()}`;
             // Now loop through the transactions and search for each one
-            //for (const ofxTxn of ofxData.transactions) {
-            const ofxTxn = ofxData.transactions[transactions.length];
-            const parsedTxn = Utils.parseOfxTransaction(ofxTxn);
+            const parsedTxn = ofxData.transactions[transactions.length];
             console.log('parsedTxn', parsedTxn);
 
             const relatedTransactions = await ApiService.getAccountTransactions(
-                    selectedAccount.id,
-                    moment(parsedTxn.datePosted).add(-3, 'days'),
-                    moment(parsedTxn.datePosted).add(3, 'days'),
-                ),
+                selectedAccount.id,
+                moment(parsedTxn.datePosted).add(-3, 'days'),
+                moment(parsedTxn.datePosted).add(3, 'days'),
+            ),
                 matchingTransactions = [];
             let proceed = true,
-                exactMatchFound = false,
-                amountMatchFound = false;
+                exactMatchFound = false;
+
             if (relatedTransactions.length >= 1) {
                 console.log(`Found ${relatedTransactions.length} related transactions`);
                 // Check to see if we have added this transaction already
                 for (const ffTxn of relatedTransactions) {
+                    // The running total is used to match on split transactions
                     let runningTotal = 0;
                     for (const txn of ffTxn.attributes.transactions) {
                         console.log('***** Examining txn', txn);
                         // First we check for an exact match based on internal or external id.
-                        // parsedTxn.transactionId should be unique but it is not in all cases
+                        // parsedTxn.transactionId should be unique but it is not in all cases, 
+                        // so we check that and the amount
                         if ((
                             (txn.internal_reference && txn.internal_reference === parsedTxn.transactionId) ||
                             (txn.external_id && txn.external_id === parsedTxn.transactionId)
@@ -167,7 +189,7 @@ function App() {
                             const amt = parseFloat(txn.amount);
                             runningTotal += amt;
                             if (amt === Math.abs(parsedTxn.amount)) {
-                                amountMatchFound = true;
+                                // amountMatchFound = true;
                                 if (
                                     (parsedTxn.amount < 0 && txn.source_id === selectedAccount.id) ||
                                     (parsedTxn.amount >= 0 && txn.destination_id === selectedAccount.id)
@@ -183,28 +205,27 @@ function App() {
                                     );
 
                                     matchingTransactions.push(ffTxn);
-                                    proceed = false;
                                     // If the description also matches, then it is an exact match
                                     if (parsedTxn.description === txn.description) {
                                         console.log('********** Found AMOUNT.EXACT match');
                                         exactMatchFound = true;
+                                        proceed = false;
                                         break;
                                     }
                                 }
                             }
                         }
                     }
-                    // TODO: what happens if the an amount of a split transaction matches mistakenly???
-                    // It is possible the transaction was split so
-                    // Now we check the total for a match (only if no amount match was found) and only add it if it is not already in the array
+
+                    // It is possible the transaction was split so check to make sure we have more than 1 transaction
+                    // and the total matches and only add it if it is not already in the array
                     if (
-                        !amountMatchFound &&
-                        runningTotal === parsedTxn.amount &&
+                        ffTxn.attributes.transactions.length > 1 && runningTotal === Math.abs(parsedTxn.amount) &&
                         !matchingTransactions.includes(ffTxn)
                     ) {
                         console.log('********** Found TOTAL match');
                         matchingTransactions.push(ffTxn);
-                        proceed = false;
+                        // proceed = false;
                     }
                     if (exactMatchFound) {
                         break;
@@ -224,7 +245,7 @@ function App() {
                         description: parsedTxn.description,
                         notes: parsedTxn.memo,
                         reconciled: false,
-                        internal_reference: parsedTxn.transactionId,
+                        external_id: parsedTxn.transactionId,
                         tags: [importTag],
                         destination_id: parsedTxn.amount >= 0 ? selectedAccount.id : undefined,
                         source_id: parsedTxn.amount >= 0 ? undefined : selectedAccount.id,
@@ -234,7 +255,7 @@ function App() {
 
             let newTransaction;
             // If proceed is still true, then we add the transaction
-            if (proceed) {
+            if (proceed && matchingTransactions.length === 0) {
                 newTransaction = await addTransaction(newTxn);
             }
 
@@ -381,34 +402,41 @@ function App() {
                                                                 </TableHead>
                                                                 <TableBody>
                                                                     {transaction.importStatus?.matchingTransactions.map(
-                                                                        (mTxn, idx1) => (
-                                                                            <TableRow>
-                                                                                <TableCell>
-                                                                                    {
-                                                                                        mTxn.attributes.transactions[0]
-                                                                                            .description
-                                                                                    }
-                                                                                </TableCell>
-                                                                                <TableCell align="center">
-                                                                                    {moment(
-                                                                                        mTxn.attributes.transactions[0]
-                                                                                            .date,
-                                                                                    ).format('DD-MMM-YYYY')}
-                                                                                </TableCell>
-                                                                                <TableCell align="right">
-                                                                                    {parseFloat(
-                                                                                        mTxn.attributes.transactions[0]
-                                                                                            .amount,
-                                                                                    ).toFixed(2)}
-                                                                                </TableCell>
-                                                                                <TableCell align="center">
-                                                                                    {
-                                                                                        mTxn.attributes.transactions[0]
-                                                                                            .type
-                                                                                    }
-                                                                                </TableCell>
-                                                                            </TableRow>
-                                                                        ),
+                                                                        (mParentTxn, idx1) => {
+                                                                            const bgColor = bgColors[idx1];
+                                                                            return (
+                                                                                <>
+                                                                                    {mParentTxn.attributes.transactions.map(
+                                                                                        (mTxn) => (
+                                                                                            <TableRow key={`pMatch_${mTxn.transaction_journal_id}`} bgcolor={bgColor}>
+                                                                                                <TableCell>
+                                                                                                    {
+                                                                                                        mTxn.description
+                                                                                                    }
+                                                                                                </TableCell>
+                                                                                                <TableCell align="center">
+                                                                                                    {moment(
+                                                                                                        mTxn.date,
+                                                                                                    ).format('DD-MMM-YYYY')}
+                                                                                                </TableCell>
+                                                                                                <TableCell align="right">
+                                                                                                    {parseFloat(
+                                                                                                        mTxn.amount,
+                                                                                                    ).toFixed(2)}
+                                                                                                </TableCell>
+                                                                                                <TableCell align="center">
+                                                                                                    {
+                                                                                                        mTxn.type
+                                                                                                    } {
+                                                                                                        mParentTxn.attributes.group_title ? "(Split)" : ""
+                                                                                                    }
+                                                                                                </TableCell>
+                                                                                            </TableRow>
+                                                                                        )
+                                                                                    )}
+                                                                                </>
+                                                                            );
+                                                                        }
                                                                     )}
                                                                 </TableBody>
                                                             </Table>

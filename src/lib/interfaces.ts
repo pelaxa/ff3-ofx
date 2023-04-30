@@ -15,7 +15,7 @@ export interface OfxData {
     balanceDate?: Moment;
     startDate?: Moment;
     endDate?: Moment;
-    transactions?: OfxTransaction[];
+    transactions?: (OfxParsedTransaction | null)[];
 }
 
 export interface OfxParsedTransaction {

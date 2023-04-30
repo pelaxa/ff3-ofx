@@ -4,6 +4,11 @@ import { OfxData, OfxParsedTransaction, OfxTransaction } from './interfaces';
 const DATE_FORMAT = 'YYYYMMDDHHmmss';
 
 class Utils {
+    /**
+     * This method returns parsed account data + raw ofx transactions as an array
+     * @param ofxDataIn The raw parsed OFX data
+     * @returns 
+     */
     static getOfxData(ofxDataIn: any) {
         const ofxData: OfxData = {
             accountNumber: undefined,
@@ -13,7 +18,10 @@ class Utils {
             endDate: undefined,
             transactions: [],
         };
+        
+        let ofxTransactions: OfxTransaction[]|null = null;
         if (ofxDataIn.OFX.CREDITCARDMSGSRSV1) {
+            // If this is a credit card account
             ofxData.accountNumber = ofxDataIn.OFX.CREDITCARDMSGSRSV1.CCSTMTTRNRS.CCSTMTRS.CCACCTFROM.ACCTID;
             ofxData.balance = ofxDataIn.OFX.CREDITCARDMSGSRSV1.CCSTMTTRNRS.CCSTMTRS.LEDGERBAL.BALAMT;
             ofxData.balanceDate = Utils.ofxDateToFF3(
@@ -25,28 +33,38 @@ class Utils {
             ofxData.endDate = Utils.ofxDateToFF3(
                 ofxDataIn.OFX.CREDITCARDMSGSRSV1.CCSTMTTRNRS.CCSTMTRS.BANKTRANLIST.DTEND,
             );
-            ofxData.transactions = ofxDataIn.OFX.CREDITCARDMSGSRSV1.CCSTMTTRNRS.CCSTMTRS.BANKTRANLIST.STMTTRN;
+            ofxTransactions = ofxDataIn.OFX.CREDITCARDMSGSRSV1.CCSTMTTRNRS.CCSTMTRS.BANKTRANLIST.STMTTRN;
         } else if (ofxDataIn.OFX.BANKMSGSRSV1) {
+            // If this is a checking or savings account
             ofxData.accountNumber = ofxDataIn.OFX.BANKMSGSRSV1.STMTTRNRS.STMTRS.BANKACCTFROM.ACCTID;
             ofxData.balance = ofxDataIn.OFX.BANKMSGSRSV1.STMTTRNRS.STMTRS.LEDGERBAL?.BALAMT || '?';
             ofxData.balanceDate = Utils.ofxDateToFF3(ofxDataIn.OFX.BANKMSGSRSV1.STMTTRNRS.STMTRS.LEDGERBAL?.DTASOF) || '?';
             ofxData.startDate = Utils.ofxDateToFF3(ofxDataIn.OFX.BANKMSGSRSV1.STMTTRNRS.STMTRS.BANKTRANLIST?.DTSTART) || '?';
             ofxData.endDate = Utils.ofxDateToFF3(ofxDataIn.OFX.BANKMSGSRSV1.STMTTRNRS.STMTRS.BANKTRANLIST?.DTEND) || '?';
-            ofxData.transactions = ofxDataIn.OFX.BANKMSGSRSV1.STMTTRNRS.STMTRS.BANKTRANLIST.STMTTRN;
+            ofxTransactions = ofxDataIn.OFX.BANKMSGSRSV1.STMTTRNRS.STMTRS.BANKTRANLIST.STMTTRN;
         } else {
             // eslint-disable-next-line no-throw-literal
             throw 'OFX format not understood';
         }
 
-        if (ofxData.transactions && !Array.isArray(ofxData.transactions)) {
-            ofxData.transactions = [ofxData.transactions];
-        } else if (!ofxData.transactions) {
-            ofxData.transactions = [];
+        // If there is only one transaction, it may not come back as an array, so make sure we have an array back
+        if (ofxTransactions !== null && !Array.isArray(ofxTransactions)) {
+            ofxTransactions = [ofxTransactions];
+        } else if (ofxTransactions == null) {
+            ofxTransactions = [];
         }
 
+        // Now reset the transactions with the parsed transactions
+        ofxData.transactions = ofxTransactions.map(ofxTxn => this.parseOfxTransaction(ofxTxn));
+        
         return ofxData;
     }
 
+    /**
+     * Convert the OFX date into something FF3 likes
+     * @param inDate 
+     * @returns 
+     */
     static ofxDateToFF3(inDate: string): Moment {
         return moment(parseInt(inDate), DATE_FORMAT);
     }
