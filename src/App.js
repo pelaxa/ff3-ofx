@@ -38,9 +38,9 @@ function App() {
     const [accounts, setAccounts] = useState();
     // The selected account for which transactions are being processed
     const [selectedAccount, setSelectedAccount] = useState();
-    // These are the procdessed transactions
+    // These are the processed transactions
     const [transactions, setTransactions] = useState([]);
-    // ???
+    // The transactions parsed from OFX
     const [ofxData, setOfxData] = useState();
     // Whether the transaction data has been processed already or not
     const [processed, setProcessed] = useState(false);
@@ -48,7 +48,7 @@ function App() {
     const [progress, setProgress] = useState(0);
     const ofxParser = OFXParser;
 
-    console.info('Version: 202304021522')
+    console.info('Version: 202306040839')
 
     useEffect(() => {
         if (!accounts) {
@@ -100,6 +100,7 @@ function App() {
         reader.readAsText(e.target.files[0]);
     };
 
+    // This method adds a new transaction to the Firefly account
     const addTransaction = async newTxn => {
         console.log('Adding new transaction', newTxn);
         let newTransaction;
@@ -122,6 +123,7 @@ function App() {
         return newTransaction;
     };
 
+    // This method adds a new transaction to the Firefly account based on user request
     const addAnyways = async existingTxn => {
         const newTransaction = await addTransaction(existingTxn.importStatus?.ff3Txn);
 
@@ -154,7 +156,10 @@ function App() {
             const importTag = `OFX Import ${new Date().toJSON()}`;
             // Now loop through the transactions and search for each one
             const parsedTxn = ofxData.transactions[transactions.length];
-            console.log('parsedTxn', parsedTxn);
+            // We do this to make sure we only have 2 digit decimals
+            const parsedAmount = parsedTxn.amount ? parseFloat(parsedTxn.amount.toFixed(2)) : 0;
+                        
+            console.log('Processing OFX transaction', parsedTxn.description, parsedTxn);
 
             const relatedTransactions = await ApiService.getAccountTransactions(
                 selectedAccount.id,
@@ -172,23 +177,28 @@ function App() {
                     // The running total is used to match on split transactions
                     let runningTotal = 0;
                     for (const txn of ffTxn.attributes.transactions) {
-                        console.log('***** Examining txn', txn);
+                        // This strange conversion is done because FF sometimes stored the value with more decimal precision so the
+                        // amount do not match exactly.  eg. 57.66 vs 57.65999999
+                        const txnAmount = txn.amount ? parseFloat(parseFloat(txn.amount).toFixed(2)) : 0;
+                        console.log('***** Examining txn:', txn);
+                        console.log('    **** ffAmount:', txnAmount, ' <==> Bank Amount:', parsedAmount);
+                        console.log('    **** ffExtId:', txn.external_id, 'ffIntId:', txn.internal_reference, ' <==> Bank ID:', parsedTxn.transactionId);
+                        console.log('    **** ffSourceAccount:', txn.source_id, ', ffDestinationAccount:', txn.destination_id, ' <==> Bank Account:', selectedAccount.id);
                         // First we check for an exact match based on internal or external id.
                         // parsedTxn.transactionId should be unique but it is not in all cases, 
                         // so we check that and the amount
                         if ((
                             (txn.internal_reference && txn.internal_reference === parsedTxn.transactionId) ||
                             (txn.external_id && txn.external_id === parsedTxn.transactionId)
-                        ) && Math.abs(txn.amount || 0) === Math.abs(parsedTxn.amount || 0)) {
+                        ) && Math.abs(txnAmount || 0) === Math.abs(parsedAmount || 0)) {
                             proceed = false;
                             exactMatchFound = true;
                             matchingTransactions.push(ffTxn);
                             console.log('********** Found EXACT match');
                             break;
-                        } else if (txn.amount) {
-                            const amt = parseFloat(txn.amount);
-                            runningTotal += amt;
-                            if (amt === Math.abs(parsedTxn.amount)) {
+                        } else if (txnAmount) {
+                            runningTotal += txnAmount;
+                            if (txnAmount === Math.abs(parsedAmount)) {
                                 // amountMatchFound = true;
                                 if (
                                     (parsedTxn.amount < 0 && txn.source_id === selectedAccount.id) ||
@@ -197,7 +207,7 @@ function App() {
                                     console.log('********** Found AMOUNT match');
                                     console.info(
                                         '********** Found AMOUNT match, parsedTxn.amount',
-                                        parsedTxn.amount,
+                                        parsedAmount,
                                         'Source match: ',
                                         txn.source_id === selectedAccount.id,
                                         'Dest match: ',
@@ -220,7 +230,7 @@ function App() {
                     // It is possible the transaction was split so check to make sure we have more than 1 transaction
                     // and the total matches and only add it if it is not already in the array
                     if (
-                        ffTxn.attributes.transactions.length > 1 && runningTotal === Math.abs(parsedTxn.amount) &&
+                        ffTxn.attributes.transactions.length > 1 && runningTotal === Math.abs(parsedAmount) &&
                         !matchingTransactions.includes(ffTxn)
                     ) {
                         console.log('********** Found TOTAL match');
@@ -241,7 +251,7 @@ function App() {
                     {
                         type: parsedTxn.amount >= 0 ? FF3TransactionType.DEPOSIT : FF3TransactionType.WITHDRAWAL,
                         date: parsedTxn.datePosted.format(),
-                        amount: Math.abs(parsedTxn.amount),
+                        amount: Math.abs(parsedAmount),
                         description: parsedTxn.description,
                         notes: parsedTxn.memo,
                         reconciled: false,
@@ -256,6 +266,7 @@ function App() {
             let newTransaction;
             // If proceed is still true, then we add the transaction
             if (proceed && matchingTransactions.length === 0) {
+                console.log(' >>>>>> Adding new transaction', newTxn);
                 newTransaction = await addTransaction(newTxn);
             }
 
@@ -279,7 +290,7 @@ function App() {
                 setTransactions([parsedTxn]);
             }
 
-            console.log('Processed Txn', progress, transactions);
+            console.log('Processed Txn! Progress: ', progress, transactions);
             setProgress((transactions.length / ofxData.transactions.length) * 100);
         } else {
             console.log('Done processing! Updating final account balance...');
