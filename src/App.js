@@ -26,6 +26,9 @@ import { Typography } from '@mui/material';
 import LinearProgress from '@mui/material/LinearProgress';
 import * as OFXParser from 'node-ofx-parser';
 
+// Import tag used to identify the import
+const importTag = `OFX Import ${moment().format('YYYY-MM-DD HH:mm:ss')}`;
+// Color for matching row backgrounds
 const bgColors = ["#eeeeee",
     "#cccccc",
     "#aaaaaa",
@@ -152,8 +155,6 @@ function App() {
         // index out of bounds
         if (selectedAccount && transactions.length < ofxData.transactions.length) {
             console.log('selectedAccount', selectedAccount);
-            // Import tag used to identify the import
-            const importTag = `OFX Import ${new Date().toJSON()}`;
             // Now loop through the transactions and search for each one
             const parsedTxn = ofxData.transactions[transactions.length];
             // We do this to make sure we only have 2 digit decimals
