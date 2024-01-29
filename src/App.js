@@ -41,9 +41,14 @@ const bgColors = ["#eeeeee",
     "#666666",
     "#444444"];
 
+
+const ERROR_FILE_COUNT_TYPE = 'Please only drop 1 file of type OFX in this area';
+const ERROR_MATCH_ACCOUNT = 'Could not find a matching account to process transactions';
+
 function App() {
     // Whether to show the import error or not
     const [showError, setShowError] = useState(false);
+    const [errorMessage, setErrorMessage] = useState(ERROR_FILE_COUNT_TYPE);
     // List of all accounts
     const [accounts, setAccounts] = useState();
     // The selected account for which transactions are being processed
@@ -56,9 +61,11 @@ function App() {
     const [processed, setProcessed] = useState(false);
     // The current progress for the transactions being processed
     const [progress, setProgress] = useState(0);
+    // The current progress for the transactions being processed
+    const [showFileDrop, setShowFileDrop] = useState(true);
     const ofxParser = OFXParser;
 
-    console.info('Version: 202401281108')
+    console.info('Version: 202401290800')
 
     useEffect(() => {
         if (!accounts) {
@@ -114,6 +121,7 @@ function App() {
         console.log('files[0].name', files[0]);
 
         if (files.length > 1 || (files[0] && !(/\.ofx$/gi).test(files[0].name))) {
+            setErrorMessage(ERROR_FILE_COUNT_TYPE);
             setShowError(true);
             return false;
         } else if(files.length === 1) {
@@ -138,8 +146,12 @@ function App() {
                         return account.attributes.account_number === tmpOfxData.accountNumber;
                     });
                     if (theAccount) {
+                        setShowFileDrop(false);
                         setSelectedAccount(theAccount);
                         setOfxData(tmpOfxData);
+                    } else {
+                        setErrorMessage(ERROR_MATCH_ACCOUNT);
+                        setShowError(true);
                     }
                 }
             };
@@ -160,6 +172,9 @@ function App() {
             newTransaction = {
                 status: 'added',
             };
+
+            // Update the balances
+            updateBalances();
         } else {
             console.log('New transaction failed', newTransactionResp);
             newTransaction = {
@@ -178,11 +193,8 @@ function App() {
 
         if (newTransaction) {
             existingTxn.importStatus = newTransaction;
-
-            const account = await ApiService.getAccount(selectedAccount.id);
-            if (account) {
-                setSelectedAccount(account);
-            }
+            // Update the balances
+            updateBalances();
 
             setTransactions(transactions);
         }
@@ -343,38 +355,40 @@ function App() {
         } else {
             console.log('Done processing! Updating final account balance...');
             // Update the account balance
-            // setTimeout(async () => {
-            const account = await ApiService.getAccount(selectedAccount.id);
-            if (account) {
-                setSelectedAccount(account);
-            }
-            // }, 1000);
+            updateBalances();
             setProcessed(true);
             console.log('Processed Transactions', progress, transactions);
         }
     };
 
+    const updateBalances = async () => {
+        const account = await ApiService.getAccount(selectedAccount.id);
+        if (account) {
+            setSelectedAccount(account);
+        }
+    }
+
     const bankBalance = ofxData ? parseFloat(ofxData.balance).toFixed(2) : 0;
     const accountBalance = selectedAccount ? parseFloat(selectedAccount.attributes.current_balance).toFixed(2) : 0;
     const diff = (bankBalance - accountBalance).toFixed(2);
-
+    
     return (
         <div className="App">
             <header className="App-header">
-                <Collapse in={!processed}>
+                <Collapse in={showFileDrop}>
                     <Collapse in={showError}>
-                        <Alert severity="error" action={<IconButton size="small" onClick={() => { setShowError(false)}}><CloseIcon /></IconButton>}>Please only drop 1 file of type OFX in this area</Alert>
+                        <Alert severity="error" action={<IconButton size="small" onClick={() => { setShowError(false)}}><CloseIcon /></IconButton>}>{errorMessage}</Alert>
                     </Collapse>
                     <p>Drop an OFX file or click below to start the import</p>
                     <Box component="section" minWidth={400} height={130}>
-                        <DropzoneArea m={10} dropzoneClass="drop_zone" filesLimit={1} showPreviews={false} showPreviewsInDropzone={true} useChipsForPreview={true} showAlerts={false} dropzoneText={''} onDropRejected={() => { setShowError(true)}} onChange={showFile}>
+                        <DropzoneArea m={10} dropzoneClass="drop_zone" filesLimit={1} showPreviews={false} showPreviewsInDropzone={true} useChipsForPreview={true} showAlerts={false} dropzoneText={''} onDropRejected={() => { setErrorMessage(ERROR_FILE_COUNT_TYPE); setShowError(true)}} onChange={showFile}>
                             <input type="file" onChange={showFile} />
                         </DropzoneArea>
                     </Box>
                     <br />
                     <br />
                 </Collapse>
-                <Collapse in={processed}>
+                <Collapse in={!showFileDrop}>
                     <Button variant="contained" onClick={() => { window.location.reload(); }}><RefreshIcon /> Start again!</Button>
                     <br/><br/>
                 </Collapse>
