@@ -14,21 +14,16 @@ import Paper from '@mui/material/Paper';
 import Box from '@mui/material/Box';
 import Card from '@mui/material/Card';
 import CardContent from '@mui/material/CardContent';
-import { Fragment } from 'react';
-import IconButton from '@mui/material/IconButton';
-import CloseIcon from '@mui/icons-material/Close';
 import Button from '@mui/material/Button';
 import Alert from '@mui/material/Alert';
-import Fab from '@mui/material/Fab';
 import AddIcon from '@mui/icons-material/Add';
-import RefreshIcon from '@mui/icons-material/Refresh';
 import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
 import SavingsIcon from '@mui/icons-material/Savings';
 import Stack from '@mui/material/Stack';
+import Chip from '@mui/material/Chip';
 import Tooltip from '@mui/material/Tooltip';
-import { Collapse, Typography } from '@mui/material';
+import { Typography } from '@mui/material';
 import LinearProgress from '@mui/material/LinearProgress';
-import { DropzoneArea } from "mui-file-dropzone";
 import * as OFXParser from 'node-ofx-parser';
 
 // Import tag used to identify the import
@@ -41,14 +36,7 @@ const bgColors = ["#eeeeee",
     "#666666",
     "#444444"];
 
-
-const ERROR_FILE_COUNT_TYPE = 'Please only drop 1 file of type OFX in this area';
-const ERROR_MATCH_ACCOUNT = 'Could not find a matching account to process transactions';
-
 function App() {
-    // Whether to show the import error or not
-    const [showError, setShowError] = useState(false);
-    const [errorMessage, setErrorMessage] = useState(ERROR_FILE_COUNT_TYPE);
     // List of all accounts
     const [accounts, setAccounts] = useState();
     // The selected account for which transactions are being processed
@@ -61,11 +49,9 @@ function App() {
     const [processed, setProcessed] = useState(false);
     // The current progress for the transactions being processed
     const [progress, setProgress] = useState(0);
-    // The current progress for the transactions being processed
-    const [showFileDrop, setShowFileDrop] = useState(true);
     const ofxParser = OFXParser;
 
-    console.info('Version: 202401290800')
+    console.info('Version: 202306040839')
 
     useEffect(() => {
         if (!accounts) {
@@ -89,76 +75,32 @@ function App() {
         setAccounts(accntResponse);
     };
 
-    // const showFile = e => {
-    //     e.preventDefault();
-    //     const reader = new FileReader();
-    //     reader.onload = e => {
-    //         const text = e.target.result;
-    //         const parsedData = ofxParser.parse(text);
-    //         // console.debug(parsedData);
-    //         const tmpOfxData = Utils.getOfxData(parsedData);
-    //         if (accounts?.length > 0) {
-    //             // Find the account
-    //             const theAccount = accounts.find(account => {
-    //                 return account.attributes.account_number === tmpOfxData.accountNumber;
-    //             });
-    //             setSelectedAccount(theAccount);
-    //             setOfxData(tmpOfxData);
-    //         }
-    //     };
-    //     // Reset our state before reading the new file
-    //     setOfxData(undefined);
-    //     setSelectedAccount(undefined);
-    //     setTransactions([]);
-    //     // setTxnIdx(0);
-    //     setProcessed(false);
-    //     setProgress(0);
-    //     // start reading the new file (This will trigger the onload event above)
-    //     reader.readAsText(e.target.files[0]);
-    // };
-
-    const showFile = files => {
-        console.log('files[0].name', files[0]);
-
-        if (files.length > 1 || (files[0] && !(/\.ofx$/gi).test(files[0].name))) {
-            setErrorMessage(ERROR_FILE_COUNT_TYPE);
-            setShowError(true);
-            return false;
-        } else if(files.length === 1) {
-
-            // Reset our state before reading the new file
-            setOfxData(undefined);
-            setSelectedAccount(undefined);
-            setTransactions([]);
-            // setTxnIdx(0);
-            setProcessed(false);
-            setProgress(0);
-
-            const reader = new FileReader();
-            reader.onload = e => {
-                console.log('file content', e);
-                const parsedData = ofxParser.parse(e.currentTarget.result);
-                // console.debug(parsedData);
-                const tmpOfxData = Utils.getOfxData(parsedData);
-                if (accounts?.length > 0) {
-                    // Find the account
-                    const theAccount = accounts.find(account => {
-                        return account.attributes.account_number === tmpOfxData.accountNumber;
-                    });
-                    if (theAccount) {
-                        setShowFileDrop(false);
-                        setSelectedAccount(theAccount);
-                        setOfxData(tmpOfxData);
-                    } else {
-                        setErrorMessage(ERROR_MATCH_ACCOUNT);
-                        setShowError(true);
-                    }
-                }
-            };
-            
-            // start reading the new file (This will trigger the onload event above)
-            reader.readAsText(files[0]);
-        }
+    const showFile = e => {
+        e.preventDefault();
+        const reader = new FileReader();
+        reader.onload = e => {
+            const text = e.target.result;
+            const parsedData = ofxParser.parse(text);
+            // console.debug(parsedData);
+            const tmpOfxData = Utils.getOfxData(parsedData);
+            if (accounts?.length > 0) {
+                // Find the account
+                const theAccount = accounts.find(account => {
+                    return account.attributes.account_number === tmpOfxData.accountNumber;
+                });
+                setSelectedAccount(theAccount);
+                setOfxData(tmpOfxData);
+            }
+        };
+        // Reset our state before reading the new file
+        setOfxData(undefined);
+        setSelectedAccount(undefined);
+        setTransactions([]);
+        // setTxnIdx(0);
+        setProcessed(false);
+        setProgress(0);
+        // start reading the new file (This will trigger the onload event above)
+        reader.readAsText(e.target.files[0]);
     };
 
     // This method adds a new transaction to the Firefly account
@@ -172,9 +114,6 @@ function App() {
             newTransaction = {
                 status: 'added',
             };
-
-            // Update the balances
-            updateBalances();
         } else {
             console.log('New transaction failed', newTransactionResp);
             newTransaction = {
@@ -193,8 +132,11 @@ function App() {
 
         if (newTransaction) {
             existingTxn.importStatus = newTransaction;
-            // Update the balances
-            updateBalances();
+
+            const account = await ApiService.getAccount(selectedAccount.id);
+            if (account) {
+                setSelectedAccount(account);
+            }
 
             setTransactions(transactions);
         }
@@ -239,7 +181,7 @@ function App() {
                         // This strange conversion is done because FF sometimes stored the value with more decimal precision so the
                         // amount do not match exactly.  eg. 57.66 vs 57.65999999
                         const txnAmount = txn.amount ? parseFloat(parseFloat(txn.amount).toFixed(2)) : 0;
-                        console.log('***** Examining txn:');
+                        console.log('***** Examining txn:', txn.description);
                         console.log('    **** ffAmount:', txnAmount, ' <==> Bank Amount:', parsedAmount);
                         console.log('    **** ffExtId:', txn.external_id, 'ffIntId:', txn.internal_reference, ' <==> Bank ID:', parsedTxn.transactionId);
                         console.log('    **** ffSourceAccount:', txn.source_id, ', ffDestinationAccount:', txn.destination_id, ' <==> Bank Account:', selectedAccount.id);
@@ -355,43 +297,29 @@ function App() {
         } else {
             console.log('Done processing! Updating final account balance...');
             // Update the account balance
-            updateBalances();
+            // setTimeout(async () => {
+            const account = await ApiService.getAccount(selectedAccount.id);
+            if (account) {
+                setSelectedAccount(account);
+            }
+            // }, 1000);
             setProcessed(true);
             console.log('Processed Transactions', progress, transactions);
+
         }
     };
-
-    const updateBalances = async () => {
-        const account = await ApiService.getAccount(selectedAccount.id);
-        if (account) {
-            setSelectedAccount(account);
-        }
-    }
 
     const bankBalance = ofxData ? parseFloat(ofxData.balance).toFixed(2) : 0;
     const accountBalance = selectedAccount ? parseFloat(selectedAccount.attributes.current_balance).toFixed(2) : 0;
     const diff = (bankBalance - accountBalance).toFixed(2);
-    
+
     return (
         <div className="App">
             <header className="App-header">
-                <Collapse in={showFileDrop}>
-                    <Collapse in={showError}>
-                        <Alert severity="error" action={<IconButton size="small" onClick={() => { setShowError(false)}}><CloseIcon /></IconButton>}>{errorMessage}</Alert>
-                    </Collapse>
-                    <p>Drop an OFX file or click below to start the import</p>
-                    <Box component="section" minWidth={400} height={130}>
-                        <DropzoneArea m={10} dropzoneClass="drop_zone" filesLimit={1} showPreviews={false} showPreviewsInDropzone={true} useChipsForPreview={true} showAlerts={false} dropzoneText={''} onDropRejected={() => { setErrorMessage(ERROR_FILE_COUNT_TYPE); setShowError(true)}} onChange={showFile}>
-                            <input type="file" onChange={showFile} />
-                        </DropzoneArea>
-                    </Box>
-                    <br />
-                    <br />
-                </Collapse>
-                <Collapse in={!showFileDrop}>
-                    <Button variant="contained" onClick={() => { window.location.reload(); }}><RefreshIcon /> Start again!</Button>
-                    <br/><br/>
-                </Collapse>
+                <p>Drop a file below to parse its content</p>
+                <input type="file" onChange={showFile} />
+                <br />
+                <br />
                 {transactions && transactions.length > 0 && (
                     <>
                         <Box sx={{ minWidth: 400, maxWidth: '80%' }}>
@@ -403,18 +331,12 @@ function App() {
                             )}
                             <Card variant="outlined">
                                 <CardContent>
-                                    <Typography variant="h4" gutterBottom component="div">
+                                    <Typography variant="h6" gutterBottom component="div">
                                         {selectedAccount.attributes.name} ({selectedAccount.attributes.account_number})
                                     </Typography>
                                     <Stack direction="row" justifyContent="space-between">
                                         <Tooltip title="Bank Balance">
-                                            <Fab variant="extended">
-                                                <Stack direction={"row"}>
-                                                    <AccountBalanceIcon />
-                                                    <Typography variant="overline">Bank</Typography>
-                                                </Stack>
-                                                <Typography variant="h5" pl={2} component="div"> ${bankBalance}</Typography>
-                                            </Fab>
+                                            <Chip icon={<AccountBalanceIcon />} label={`$ ${bankBalance}`} />
                                         </Tooltip>
                                         {!processed && (
                                             <Box sx={{ minWidth: 150, mr: 1, alignSelf: 'center' }}>
@@ -423,7 +345,7 @@ function App() {
                                         )}
                                         {processed && (
                                             <Typography
-                                                variant="h4"
+                                                variant="h6"
                                                 sx={{ color: `${bankBalance !== accountBalance ? '#f00' : '#090'}` }}
                                                 gutterBottom
                                                 component="div">
@@ -431,13 +353,7 @@ function App() {
                                             </Typography>
                                         )}
                                         <Tooltip title="Account Balance">
-                                            <Fab variant="extended">
-                                                <Stack direction={"row"}>
-                                                    <SavingsIcon />
-                                                    <Typography variant="overline">Firefly</Typography>
-                                                </Stack>
-                                                <Typography variant="h5" pl={2} component="div"> ${accountBalance}</Typography>
-                                            </Fab>
+                                            <Chip icon={<SavingsIcon />} label={`$ ${accountBalance}`} />
                                         </Tooltip>
                                     </Stack>
                                 </CardContent>
@@ -457,7 +373,7 @@ function App() {
                                 </TableHead>
                                 <TableBody>
                                     {transactions.map((transaction, idx) => (
-                                        <Fragment key={`ofxTxn_${idx}_root`}>
+                                        <>
                                             <TableRow>
                                                 <TableCell>{transaction.description}</TableCell>
                                                 <TableCell align="center">
@@ -467,10 +383,10 @@ function App() {
                                                 <TableCell align="center">{transaction.importStatus?.status}</TableCell>
                                                 <TableCell align="center">
                                                     <Button
-                                                        variant="contained"
+                                                        variant="text"
                                                         disabled={transaction.importStatus?.status !== 'noop'}
                                                         onClick={() => addAnyways(transaction)}>
-                                                       <AddIcon /> Add anyways
+                                                        <AddIcon /> Add anyways
                                                     </Button>
                                                 </TableCell>
                                             </TableRow>
@@ -489,7 +405,7 @@ function App() {
                                                                 sx={{ width: '100%', alignSelf: 'flex-end' }}
                                                                 aria-label="simple table">
                                                                 <TableHead>
-                                                                    <TableRow key={'match_header'}>
+                                                                    <TableRow>
                                                                         <TableCell>Description</TableCell>
                                                                         <TableCell align="center">Date</TableCell>
                                                                         <TableCell align="right">
@@ -503,14 +419,12 @@ function App() {
                                                                         (mParentTxn, idx1) => {
                                                                             const bgColor = bgColors[idx1];
                                                                             return (
-                                                                                <Fragment key={`pMatchEntry_${idx1}`}>
+                                                                                <>
                                                                                     {mParentTxn.attributes.transactions.map(
-                                                                                        (mTxn, idx2) => (
+                                                                                        (mTxn) => (
                                                                                             <TableRow key={`pMatch_${mTxn.transaction_journal_id}`} bgcolor={bgColor}>
                                                                                                 <TableCell>
                                                                                                     {
-                                                                                                        mParentTxn.totalMatch ? <b>[Split - {idx2+1} of {mParentTxn.attributes.transactions.length}] </b> : ""
-                                                                                                    }{
                                                                                                         mTxn.description
                                                                                                     }
                                                                                                 </TableCell>
@@ -527,12 +441,14 @@ function App() {
                                                                                                 <TableCell align="center">
                                                                                                     {
                                                                                                         mTxn.type
+                                                                                                    } {
+                                                                                                        mParentTxn.attributes.group_title ? "(Split)" : ""
                                                                                                     }
                                                                                                 </TableCell>
                                                                                             </TableRow>
                                                                                         )
                                                                                     )}
-                                                                                </Fragment>
+                                                                                </>
                                                                             );
                                                                         }
                                                                     )}
@@ -543,7 +459,7 @@ function App() {
                                                     <TableCell></TableCell>
                                                 </TableRow>
                                             )}
-                                        </Fragment>
+                                        </>
                                     ))}
                                 </TableBody>
                             </Table>
