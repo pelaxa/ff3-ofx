@@ -13,6 +13,10 @@
   }
 }
 
+.MuiTypography-h3 {
+  font-size: 1vw !important;
+}
+
 .App-header {
   background-color: #282c34;
   min-height: 100vh;
@@ -24,6 +28,7 @@
   font-size: calc(8px + 1vmin);
   font-family:'Lucida Sans', 'Lucida Sans Regular', 'Lucida Grande', 'Lucida Sans Unicode', Geneva, Verdana, sans-serif;
   color: white;
+  padding: auto 20px;
 }
 
 .App-link {
@@ -149,4 +154,11 @@
 
 .drop_zone {
   min-height: 100%  !important;
+}
+
+.scrollview {
+  max-height: 80vh;
+  margin: 0 auto;
+  width: 80vw;
+  overflow-y: scroll;
 }

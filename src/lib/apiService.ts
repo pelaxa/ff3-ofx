@@ -1,6 +1,6 @@
 import { Moment } from 'moment';
 import http from './http-common';
-import { FF3Account, FF3Error, FF3Transaction, FF3Wrapper } from './interfaces';
+import { FF3Account, FF3AddTransactionWrapper, FF3Error, FF3Transaction, FF3TransactionSplit, FF3Wrapper } from './interfaces';
 
 const DATE_FORMAT = 'YYYY-MM-DD';
 const exceptionHandling = {
@@ -41,12 +41,12 @@ const getAccounts = async(): Promise<FF3Wrapper<FF3Account>[]> => {
 };
 
 const getAccount = async(accountId: number): Promise<FF3Wrapper<FF3Account> | null> => {
-  const response = await http.get(`/accounts/${accountId}`, exceptionHandling);
-  console.log('Get Account status', response.status, response.status === 200, response.data?.data);
-  if (response.status === 200 && response.data.data) {
-    return response.data.data;
-  } 
-  return null;
+    const response = await http.get(`/accounts/${accountId}`, exceptionHandling);
+    console.log('Get Account status', response.status, response.status === 200, response.data?.data);
+    if (response.status === 200 && response.data.data) {
+        return response.data.data;
+    } 
+    return null;
 };
 
 const getAccountTransactions = async (accountId: number, startDate?: Moment, endDate?: Moment): Promise<FF3Wrapper<FF3Transaction>[]> => {
@@ -85,7 +85,7 @@ const getTransactions = async (startDate?: Moment, endDate?: Moment): Promise<FF
     return [];
 };
 
-const addTransaction = async (txn: any): Promise<FF3Wrapper<FF3Transaction> | FF3Error> => {
+const addTransaction = async (txn: FF3AddTransactionWrapper<FF3TransactionSplit>): Promise<FF3Wrapper<FF3Transaction> | FF3Error> => {
     const response = await http.post('/transactions', txn, exceptionHandling);
     if (response.status === 200 && response.data.data) {
       return response.data.data;
