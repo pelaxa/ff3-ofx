@@ -116,6 +116,10 @@ class Utils {
 
         return null;
     }
+
+    static getLocaleCurrency(amount: number) {
+        return amount.toLocaleString(navigator.language, {maximumFractionDigits: 2, minimumFractionDigits: 2});
+    }
 }
 
 export default Utils;

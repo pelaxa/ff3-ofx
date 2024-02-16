@@ -40,7 +40,7 @@ const getAccounts = async(): Promise<FF3Wrapper<FF3Account>[]> => {
     return [];
 };
 
-const getAccount = async(accountId: number): Promise<FF3Wrapper<FF3Account> | null> => {
+const getAccount = async(accountId: string): Promise<FF3Wrapper<FF3Account> | null> => {
     const response = await http.get(`/accounts/${accountId}`, exceptionHandling);
     console.log('Get Account status', response.status, response.status === 200, response.data?.data);
     if (response.status === 200 && response.data.data) {
@@ -49,7 +49,7 @@ const getAccount = async(accountId: number): Promise<FF3Wrapper<FF3Account> | nu
     return null;
 };
 
-const getAccountTransactions = async (accountId: number, startDate?: Moment, endDate?: Moment): Promise<FF3Wrapper<FF3Transaction>[]> => {
+const getAccountTransactions = async (accountId: string, startDate?: Moment, endDate?: Moment): Promise<FF3Wrapper<FF3Transaction>[]> => {
     let queryString = '';
     if (startDate || endDate) {
         if (startDate) {

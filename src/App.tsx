@@ -6,12 +6,12 @@ import './App.css';
 import { FF3Account, FF3AddTransactionWrapper, FF3Error, FF3TransactionSplit, FF3TransactionType, FF3Wrapper, OfxData, OfxParsedTransaction } from 'lib/interfaces';
 import Button from '@mui/material/Button';
 import RefreshIcon from '@mui/icons-material/Refresh';
-import { Collapse } from '@mui/material';
+import { Collapse, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow } from '@mui/material';
 import FileDrop from 'components/FileDrop';
 import * as OFXParser from 'node-ofx-parser';
 import Summary from 'components/Summary';
-import OfxTransactionsTable from 'components/OfxTransactionsTable';
-import { Ofx } from 'ofx-data-extractor';
+import OfxTransactionsRow from 'components/OfxTransactionsRow';
+// import { Ofx } from 'ofx-data-extractor';
 
 // Import tag used to identify the import
 const importTag = `OFX Import ${moment().format('YYYY-MM-DD HH:mm:ss')}`;
@@ -63,6 +63,7 @@ function App() {
 
             // console.log('parsing ofx with new lib...');
             // Ofx.fromBlob(files[0]).then(parsedOfx => {
+            //     console.log('Parsing with second parsedOfx', parsedOfx);
             //     const parsedData = parsedOfx.toJson();
             //     console.log('Parsing with second parser', parsedData);
             //     const tmpOfxData = Utils.getOfxData(parsedData);
@@ -109,8 +110,8 @@ function App() {
 
             if (newTransaction) {
                 existingTxn.importStatus = newTransaction;
-
-                setTransactions(transactions);
+                console.log('Added new transaction (anyways) successfully', newTransaction);
+                setTransactions([...transactions]);
             }
         }
     };
@@ -200,8 +201,8 @@ function App() {
                                 if (txnAmount === Math.abs(parsedAmount)) {
                                     // amountMatchFound = true;
                                     if (
-                                        (parsedTxn.amount < 0 && parseInt(txn.source_id || '0') === selectedAccount.id) ||
-                                        (parsedTxn.amount >= 0 && parseInt(txn.destination_id || '0') === selectedAccount.id)
+                                        (parsedTxn.amount < 0 && txn.source_id === selectedAccount.id) ||
+                                        (parsedTxn.amount >= 0 && txn.destination_id === selectedAccount.id)
                                     ) {
                                         console.log('********** Found AMOUNT match');
                                         // console.info(
@@ -276,7 +277,7 @@ function App() {
                 } else {
                     console.log(' >>>>>> Transaction already existed');
                     parsedTxn.importStatus = {
-                        status: 'noop',
+                        status: exactMatchFound ? 'match-exact' : 'match-value',
                         matchingTransactions: matchingTransactions,
                         ff3Txn: newTxn,
                     };
@@ -286,7 +287,7 @@ function App() {
                 console.log(' >>>>>> parsedTxn', parsedTxn);
                 if (transactions && transactions.length > 0) {
                     console.log('adding to existing transactions...');
-                    setTransactions([...transactions, parsedTxn]);
+                    setTransactions([parsedTxn, ...transactions]);
                 } else {
                     console.log('setting new transaction...');
                     setTransactions([parsedTxn]);
@@ -337,7 +338,24 @@ function App() {
                         <Summary bankBalance={bankBalance} accountId={selectedAccount?.id} processed={processed} progress={progress} />
                         <br />
                         <div className="scrollview" >
-                            <OfxTransactionsTable transactions={transactions} importTransaction={addAnyways} />
+                            <TableContainer component={Paper} sx={{ minWidth: 900, maxWidth: '60%', maxHeight: '70vh', margin: '0 auto' }}>
+                                <Table stickyHeader aria-label="collapsible sticky table">
+                                    <TableHead>
+                                        <TableRow className="Header-Row">
+                                            <TableCell className="Header-Row">Description</TableCell>
+                                            <TableCell align="center">Date</TableCell>
+                                            <TableCell align="right">Amount</TableCell>
+                                            <TableCell align="center">Status</TableCell>
+                                            <TableCell align="center">Action</TableCell>
+                                        </TableRow>
+                                    </TableHead>
+                                    <TableBody>
+                                        {transactions.map((transaction, idx) => (
+                                            <OfxTransactionsRow transaction={transaction} index={idx} importTransaction={addAnyways} />
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            </TableContainer>
                         </div>
                     </>
                 )}

@@ -26,7 +26,7 @@ export interface OfxParsedTransaction {
     description: string;
     memo: string;
     importStatus?: {
-        status: 'success'|'failure'|'noop';
+        status: 'success'|'failure'|'match-exact'|'match-value';
         statusMessage?: string;
         statusError?: {[key: string]: string[]};
         matchingTransactions?: FF3Wrapper<FF3Transaction>[];
@@ -198,7 +198,7 @@ export interface FF3Transaction {
 
 export interface FF3Wrapper<FF3Object = FF3Transaction | FF3Account> {
     type: string;
-    id: number;
+    id: string;
     attributes: FF3Object;
     totalMatch?: boolean;
 }
