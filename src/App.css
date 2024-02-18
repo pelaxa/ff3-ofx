@@ -18,6 +18,10 @@ h6 {
   font-size: 1rem !important;
 }
 
+input {
+  color: #fff !important;
+}
+
 .MuiTypography-h3 {
   font-size: 23px !important;
 }

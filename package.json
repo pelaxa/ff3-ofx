@@ -1,17 +1,27 @@
 {
   "name": "ff3-ofx",
-  "version": "0.4.0",
+  "version": "0.3.0",
   "homepage": "./",
   "private": true,
+  "licenses": [
+    {
+      "name": "GPL-3.0-or-later",
+      "url": "https://www.gnu.org/licenses/gpl-3.0-standalone.html",
+      "text": "Copyright (c) 2024"
+    }
+  ],
   "dependencies": {
     "@emotion/react": "^11.11.3",
     "@emotion/styled": "^11.11.0",
+    "@mui/icons-material": "^5.15.10",
     "@mui/material": "^5.15.6",
+    "@testing-library/dom": "^9.3.4",
     "@testing-library/jest-dom": "^5.14.1",
     "@testing-library/react": "^13.0.0",
     "@testing-library/user-event": "^13.2.1",
     "mui-file-dropzone": "^4.0.2",
     "ofx-data-extractor": "^1.3.4",
+    "prop-types": "^15.8.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-scripts": "5.0.1",
@@ -19,8 +29,9 @@
   },
   "scripts": {
     "start": "react-scripts start",
-    "build": "react-scripts build",
-    "postbuild": "zip ./build",
+    "compile": "react-scripts build",
+    "dist": "rm -rf dist && mkdir dist && cp -RPf build dist/ff3-ofx && cd dist && zip ff3-ofx-${npm_package_version}.zip ff3-ofx/* && rm -rf ff3-ofx",
+    "package": "yarn compile && yarn dist",
     "test": "react-scripts test",
     "eject": "react-scripts eject",
     "clean": "rm -rf ./node_modules ./build/*"
@@ -44,8 +55,10 @@
     ]
   },
   "devDependencies": {
+    "@babel/core": "^7.23.9",
     "@babel/plugin-proposal-private-property-in-object": "^7.21.11",
     "eslint": "^8.18.0",
     "typescript": "^4.7.4"
-  }
+  },
+  "packageManager": "yarn@4.1.0"
 }

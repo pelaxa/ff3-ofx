@@ -10,6 +10,11 @@
 
 # production
 /build
+/dist
+
+#yarn
+.yarn/yarn.build.json
+.yarn/install-state.gz
 
 # misc
 .DS_Store

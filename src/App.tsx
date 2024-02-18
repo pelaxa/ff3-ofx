@@ -6,7 +6,7 @@ import './App.css';
 import { FF3Account, FF3AddTransactionWrapper, FF3Error, FF3TransactionSplit, FF3TransactionType, FF3Wrapper, OfxData, OfxParsedTransaction } from 'lib/interfaces';
 import Button from '@mui/material/Button';
 import RefreshIcon from '@mui/icons-material/Refresh';
-import { Collapse, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow } from '@mui/material';
+import { Box, Checkbox, Collapse, FormControlLabel, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography } from '@mui/material';
 import FileDrop from 'components/FileDrop';
 import * as OFXParser from 'node-ofx-parser';
 import Summary from 'components/Summary';
@@ -20,7 +20,12 @@ const importTag = `OFX Import ${moment().format('YYYY-MM-DD HH:mm:ss')}`;
 const ERROR_FILE_COUNT_TYPE = 'Please only drop 1 file of type OFX in this area';
 const ERROR_MATCH_ACCOUNT = 'Could not find a matching account to process transactions';
 
+interface Token {
+    value: string;
+};
+
 function App() {
+    const [token, setToken] = useState<Token>();
     // List of all accounts
     const [accounts, setAccounts] = useState<FF3Wrapper<FF3Account>[]>();
     // The selected account for which transactions are being processed
@@ -40,8 +45,28 @@ function App() {
     /**
      * Fetch the list of accounts
      */
-    const init = useCallback( async () => {
-        ApiService.getAccounts().then( accntResponse => setAccounts(accntResponse));
+    const init = useCallback( async (currentToken?: Token) => {
+        ApiService.getAccounts(currentToken?.value).then( accntResponse => {
+            if (accntResponse && accntResponse.length > 0) {
+                setAccounts(accntResponse);
+                // If we got accounts back, then store the token
+                if (currentToken && currentToken.value) {
+                    localStorage.setItem('token', JSON.stringify(currentToken));
+                    setToken(currentToken);
+                }
+            } else {
+                // Delete localstorage
+                // localStorage.removeItem('token');
+                // if (currentToken && (!token || !token.value)) {
+                    // setToken(undefined);
+                // }
+            }
+        }).catch(e => {
+            console.log('could not get accounts', e);
+            // // Delete localstorage
+            // localStorage.removeItem('token');
+            // setToken(undefined);
+        });
     },[]);
 
     const showFile = useCallback ( (files: File[]) => {
@@ -112,6 +137,8 @@ function App() {
                 existingTxn.importStatus = newTransaction;
                 console.log('Added new transaction (anyways) successfully', newTransaction);
                 setTransactions([...transactions]);
+                // Change progress so that the summary also updates
+                setProgress(progress+1);
             }
         }
     };
@@ -218,7 +245,7 @@ function App() {
                                         // If the description also matches, then it is an exact match
                                         if (parsedTxn.description === txn.description) {
                                             console.log('********** Found AMOUNT.EXACT match');
-                                            exactMatchFound = true;
+                                            exactMatchFound = false;
                                             proceed = false;
                                             break;
                                         }
@@ -304,12 +331,7 @@ function App() {
     }, [addTransaction, ofxData, progress, selectedAccount, transactions]);
 
     useEffect(() => {
-        if (!accounts) {
-            // If we do not have any accounts fetched, fetch them first
-            console.info('Version: 202402110800');
-            console.log('calling init...');
-            init();
-        } else if (ofxData && selectedAccount && !processed) {
+        if (accounts && ofxData && selectedAccount && !processed) {
             // If we have a selected account and new data, then start processing
             console.log('Start processing...');
             setTimeout(() => {
@@ -319,6 +341,22 @@ function App() {
             console.log('transactions updated', transactions);
         }
     },[accounts, init, ofxData, processTransactions, processed, selectedAccount, transactions]);
+
+    /**
+     * Read the token anytime the screen is refreshed.
+     */
+    useEffect(() => {
+        // console.log('localStorage.getItem(\'token\')', (localStorage.getItem('token') ?? null));
+        const localToken = JSON.parse(localStorage.getItem('token') || '{}');
+        if (localToken && localToken.value) {
+            // setToken(localToken);
+            // initialize the http client
+            if (!accounts) {
+                ApiService.getHttp(localToken.value);
+                init(localToken);
+            }
+        }
+    }, [accounts, init]);
     
 
     const bankBalance: number = ofxData ? parseFloat(parseFloat(''+ofxData.balance).toFixed(2)) : 0;
@@ -326,11 +364,36 @@ function App() {
     return (
         <div className="App">
             <div className="App-header">
-                <Collapse in={showFileDrop}>
-                    <FileDrop text={'Drop an OFX file or click below to start the import'} errorMessage={errorMessage} fileLimit={1} onChange={showFile} />
+                <Collapse in={!token}>
+                    <Box sx={{width: '50%', margin: '0 auto'}}>
+                        <Typography variant='h5' sx={{m:5}}>Provide your FireFlyIII token below.  Just tab out of the field when done, 
+                            but do not forget to check the store box if you would like to store the key for next time.</Typography>
+                        <TextField
+                            required
+                            focused
+                            color="primary"
+                            variant="filled"
+                            id="outlined-password-input"
+                            label="FF3 Token"
+                            sx={{width: '60ch'}}
+                            type="password"
+                            autoComplete="current-password"
+                            onBlur={(event: React.FocusEvent<HTMLInputElement, Element>) => {
+                                if (event.target.value.trim().length > 0) {
+                                    init({"value": `${event.target.value.trim()}`})
+                                }
+                            }}
+                        />
+                        <br/>
+                        <FormControlLabel control={<Checkbox defaultChecked />} label="Store Token for next time" />
+                    </Box>
                 </Collapse>
-                <Collapse in={!showFileDrop}>
-                    <Button variant="contained" onClick={() => { window.location.reload(); }}><RefreshIcon /> Start again!</Button>
+                <Collapse in={!!token && showFileDrop}>
+                    <FileDrop text={'Drop an OFX file or click below to start the import'} errorMessage={errorMessage} fileLimit={1} onChange={showFile} />
+                    <Button variant="contained" color="secondary" onClick={() => { localStorage.removeItem('token'); window.location.reload(); }}><RefreshIcon /> &nbsp;Reset Token!</Button>
+                </Collapse>
+                <Collapse in={!!token && !showFileDrop}>
+                    <Button variant="contained" onClick={() => { window.location.reload(); }}><RefreshIcon /> &nbsp;New Import!</Button>
                     <br/><br/>
                 </Collapse>
                 {transactions && transactions.length > 0 && (
