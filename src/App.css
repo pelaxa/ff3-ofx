@@ -1,0 +1,62 @@
+.App {
+  text-align: center;
+}
+
+.App-logo {
+  height: 40vmin;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .App-logo {
+    animation: App-logo-spin infinite 20s linear;
+  }
+}
+
+h6 {
+  text-transform: uppercase;
+  font-size: 1rem !important;
+}
+
+input {
+  color: #fff !important;
+}
+
+.MuiTypography-h3 {
+  font-size: 23px !important;
+}
+
+.App-header {
+  background-color: #282c34;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  font-size: calc(8px + 1vmin);
+  font-family:'Lucida Sans', 'Lucida Sans Regular', 'Lucida Grande', 'Lucida Sans Unicode', Geneva, Verdana, sans-serif;
+  color: white;
+  padding: auto 20px;
+}
+
+.MuiTableHead-root .MuiTableCell-root {
+  font-weight: bold;
+}
+
+.drop_zone {
+  min-height: 100%  !important;
+}
+
+.scrollview {
+  max-height: 80vh;
+  margin: 0 auto;
+  width: 100%;
+  min-width: 900px;
+  overflow-y: scroll;
+}
+
+.matching-txns th,
+.matching-txns td {
+  color: #fff !important;
+}
