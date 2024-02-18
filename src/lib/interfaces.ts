@@ -26,10 +26,11 @@ export interface OfxParsedTransaction {
     description: string;
     memo: string;
     importStatus?: {
-        status: 'success'|'failure'|'noop';
+        status: 'success'|'failure'|'match-exact'|'match-value';
         statusMessage?: string;
-        statusError?: any[];
-        matchingTransactions?: FF3Transaction[];
+        statusError?: {[key: string]: string[]};
+        matchingTransactions?: FF3Wrapper<FF3Transaction>[];
+        ff3Txn?: FF3AddTransactionWrapper<FF3TransactionSplit>;
     }
 }
 
@@ -192,11 +193,19 @@ export interface FF3Transaction {
     updated_at?: string;
     user?: string;
     group_title?: string;
-    transactions: FF3TransactionSplit;
+    transactions: FF3TransactionSplit[];
 }
 
 export interface FF3Wrapper<FF3Object = FF3Transaction | FF3Account> {
     type: string;
-    id: number;
+    id: string;
     attributes: FF3Object;
+    totalMatch?: boolean;
+}
+
+export interface FF3AddTransactionWrapper<FF3TransactionSplit> {
+    error_if_duplicate_hash: true;
+    apply_rules: true;
+    group_title: null;
+    transactions: FF3TransactionSplit[];
 }

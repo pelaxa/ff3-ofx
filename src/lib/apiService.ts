@@ -1,6 +1,8 @@
 import { Moment } from 'moment';
-import http from './http-common';
-import { FF3Account, FF3Error, FF3Transaction, FF3Wrapper } from './interfaces';
+import { FF3Account, FF3AddTransactionWrapper, FF3Error, FF3Transaction, FF3TransactionSplit, FF3Wrapper } from './interfaces';
+import axios, { AxiosInstance } from 'axios';
+
+export const BASE_URL = "/api/v1";
 
 const DATE_FORMAT = 'YYYY-MM-DD';
 const exceptionHandling = {
@@ -9,7 +11,27 @@ const exceptionHandling = {
     },
 };
 
-const getAccounts = async(): Promise<FF3Wrapper<FF3Account>[]> => {
+let myHttpClient: AxiosInstance | undefined;
+
+const getHttp = (token?: string| null) => {
+    if (token === null) {
+        myHttpClient = undefined;
+    } else if (!myHttpClient && token) {
+        console.info('Creating http client...');
+        myHttpClient = axios.create({
+            baseURL: BASE_URL,
+            headers: {
+            'Content-type': 'application/json',
+            'Accept': 'application/json',
+            'Authorization': `Bearer ${token}`
+            },
+        });
+    }
+
+    return myHttpClient;
+}
+
+const getAccounts = async(currentToken?: string): Promise<FF3Wrapper<FF3Account>[]> => {
     // This is useful for debugging request/response
     // http.interceptors.request.use(
     //   request => {
@@ -31,8 +53,9 @@ const getAccounts = async(): Promise<FF3Wrapper<FF3Account>[]> => {
     //     return Promise.reject(error);
     //   },
     // );
-    const response = await http.get('/accounts', exceptionHandling);
-    if (response.status === 200 && response.data.data) {
+    const http = getHttp(currentToken);
+    const response = await http?.get('/accounts', exceptionHandling);
+    if (response && response.status === 200 && response.data.data) {
       return response.data.data;
     } 
 
@@ -40,16 +63,18 @@ const getAccounts = async(): Promise<FF3Wrapper<FF3Account>[]> => {
     return [];
 };
 
-const getAccount = async(accountId: number): Promise<FF3Wrapper<FF3Account> | null> => {
-  const response = await http.get(`/accounts/${accountId}`, exceptionHandling);
-  console.log('Get Account status', response.status, response.status === 200, response.data?.data);
-  if (response.status === 200 && response.data.data) {
-    return response.data.data;
-  } 
-  return null;
+const getAccount = async(accountId: string): Promise<FF3Wrapper<FF3Account> | null> => {
+    const http = getHttp();
+    const response = await http?.get(`/accounts/${accountId}`, exceptionHandling);
+    console.log('Get Account status', response?.status, response?.status === 200, response?.data?.data);
+    if (response && response.status === 200 && response.data.data) {
+        return response.data.data;
+    } 
+    return null;
 };
 
-const getAccountTransactions = async (accountId: number, startDate?: Moment, endDate?: Moment): Promise<FF3Wrapper<FF3Transaction>[]> => {
+const getAccountTransactions = async (accountId: string, startDate?: Moment, endDate?: Moment): Promise<FF3Wrapper<FF3Transaction>[]> => {
+    const http = getHttp();
     let queryString = '';
     if (startDate || endDate) {
         if (startDate) {
@@ -60,8 +85,8 @@ const getAccountTransactions = async (accountId: number, startDate?: Moment, end
         }
     }
     console.log('queryString', queryString);
-    const response = await http.get(`/accounts/${accountId}/transactions${queryString}`, exceptionHandling);
-    if (response.status === 200 && response.data.data) {
+    const response = await http?.get(`/accounts/${accountId}/transactions${queryString}`, exceptionHandling);
+    if (response && response.status === 200 && response.data.data) {
       return response.data.data;
     }
     return [];
@@ -69,6 +94,7 @@ const getAccountTransactions = async (accountId: number, startDate?: Moment, end
 };
 
 const getTransactions = async (startDate?: Moment, endDate?: Moment): Promise<FF3Wrapper<FF3Transaction>[]> => {
+    const http = getHttp();
     let queryString = '';
     if (startDate || endDate) {
         if (startDate) {
@@ -78,22 +104,24 @@ const getTransactions = async (startDate?: Moment, endDate?: Moment): Promise<FF
             queryString += `${queryString.length > 0 ? '&' : '?'}end=${endDate.format(DATE_FORMAT)}`;
         }
     }
-    const response = await http.get(`/transactions${queryString}`, exceptionHandling);
-    if (response.status === 200 && response.data.data) {
+    const response = await http?.get(`/transactions${queryString}`, exceptionHandling);
+    if (response && response.status === 200 && response.data.data) {
       return response.data.data;
     }
     return [];
 };
 
-const addTransaction = async (txn: any): Promise<FF3Wrapper<FF3Transaction> | FF3Error> => {
-    const response = await http.post('/transactions', txn, exceptionHandling);
-    if (response.status === 200 && response.data.data) {
+const addTransaction = async (txn: FF3AddTransactionWrapper<FF3TransactionSplit>): Promise<FF3Wrapper<FF3Transaction> | FF3Error | null> => {
+    const http = getHttp();
+    const response = await http?.post('/transactions', txn, exceptionHandling);
+    if (response && response.status === 200 && response.data.data) {
       return response.data.data;
     }
-    return response.data as FF3Error;
+    return response ? response.data as FF3Error : null; 
 };
 
 const ApiService = {
+    getHttp,
     getAccounts,
     getAccount,
     getTransactions,
