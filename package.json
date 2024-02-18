@@ -1,6 +1,6 @@
 {
   "name": "ff3-ofx",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "homepage": "./",
   "private": true,
   "licenses": [
@@ -30,7 +30,7 @@
   "scripts": {
     "start": "react-scripts start",
     "compile": "react-scripts build",
-    "dist": "rm -rf dist && mkdir dist && cp -RPf build dist/ff3-ofx && cd dist && zip ff3-ofx-${npm_package_version}.zip ff3-ofx/* && rm -rf ff3-ofx",
+    "dist": "rm -rf dist && mkdir dist && cp -RPf build dist/ff3-ofx && cd dist && zip -r ff3-ofx-${npm_package_version}.zip ff3-ofx/* && rm -rf ff3-ofx",
     "package": "yarn compile && yarn dist",
     "test": "react-scripts test",
     "eject": "react-scripts eject",
