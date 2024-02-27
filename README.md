@@ -1,6 +1,6 @@
 # FF3-OFX
 
-This is a React application that can be used to import transactions using your financial institution's OFX (Money format) exports.  The application runs on client side only and stores the FF3 token (for authentication) in localStorage on your browser. Since it is a client side app only, It expects be served from the same domain as your FireFlyIII (FF3) instance.  See `Deployment` below for more information.
+This is a React application that can be used to import transactions using your financial institution's OFX (Money format) exports.  The application runs on client side only and stores the FF3 token (for authentication) in localStorage on your browser. Since it is a client side only application, It expects to be served from the same domain as your FireFlyIII (FF3) instance.  See `Deployment` below for more information.
 
 This is just a quick side project I revamped a little so that others may use it as well, but there are no real maintenance plans as of yet and it has only been tested for my personal use case so far so there may be bugs for certain situations.
 
