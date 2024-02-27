@@ -26,7 +26,9 @@ const OfxTransactionsRow = (props: OfxTransactionsTableProps) => {
                 jsx = <Chip label="exact matched" color="primary" />;
                 break;
             case 'match-value':
-                jsx = <Chip label="amount matched" color="secondary" />;
+                jsx = <Chip label="amount matched" color="secondary" 
+                            deleteIcon={open ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />} 
+                            onDelete={() => setOpen(!open)}/>;
                 break;
             case 'success':
                 jsx = <Chip label="added" color="success" />;
@@ -39,21 +41,7 @@ const OfxTransactionsRow = (props: OfxTransactionsTableProps) => {
         <Fragment key={`ofxTxn_${props.index}_root`}>
             <TableRow>
                 <TableCell>
-                    <>
-                    {
-                        ['failure', 'match-value'].includes(props.transaction.importStatus?.status || '') && (
-                            <IconButton
-                                aria-label="expand row"
-                                size="small"
-                                onClick={() => setOpen(!open)}
-                                sx={{float: 'right', '&:hover': {backgroundColor: 'rgb(156, 39, 176)', color: '#fff'} }}
-                            >
-                                {open ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
-                            </IconButton>
-                        )
-                    }
                     {props.transaction.description}
-                    </>
                 </TableCell>
                 <TableCell align="center">
                     {props.transaction.datePosted.format('DD-MMM-YYYY')}
