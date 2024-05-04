@@ -13,6 +13,10 @@ const exceptionHandling = {
 
 let myHttpClient: AxiosInstance | undefined;
 
+const reset = () => {
+    myHttpClient = undefined;
+}
+
 const getHttp = (token?: string| null) => {
     if (token === null) {
         myHttpClient = undefined;
@@ -31,9 +35,11 @@ const getHttp = (token?: string| null) => {
     return myHttpClient;
 }
 
-const getAccounts = async(currentToken?: string): Promise<FF3Wrapper<FF3Account>[]> => {
-    // This is useful for debugging request/response
-    // http.interceptors.request.use(
+const getAccounts = async(currentToken?: string): Promise<FF3Wrapper<FF3Account>[] | null> => {
+    const http = getHttp(currentToken);
+    
+    // // This is useful for debugging request/response
+    // http?.interceptors.request.use(
     //   request => {
     //     console.log('Starting Request', JSON.stringify(request, null, 2));
     //     return request;
@@ -43,7 +49,7 @@ const getAccounts = async(currentToken?: string): Promise<FF3Wrapper<FF3Account>
     //     return Promise.reject(error);
     //   },
     // );
-    // http.interceptors.response.use(
+    // http?.interceptors.response.use(
     //   response => {
     //     console.log('Receiving Response', JSON.stringify(response, null, 2));
     //     return response;
@@ -53,11 +59,15 @@ const getAccounts = async(currentToken?: string): Promise<FF3Wrapper<FF3Account>
     //     return Promise.reject(error);
     //   },
     // );
-    const http = getHttp(currentToken);
+
     const response = await http?.get('/accounts', exceptionHandling);
-    if (response && response.status === 200 && response.data.data) {
-      return response.data.data;
-    } 
+    if (response && response.status) {
+        if (response.status === 200 && response.data.data) {
+            return response.data.data;
+          } else if (response.status === 401) {
+            return null;
+          }
+    }
 
     // Return an empty array otherwise
     return [];
@@ -121,6 +131,7 @@ const addTransaction = async (txn: FF3AddTransactionWrapper<FF3TransactionSplit>
 };
 
 const ApiService = {
+    reset,
     getHttp,
     getAccounts,
     getAccount,
