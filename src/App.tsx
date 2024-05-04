@@ -51,15 +51,18 @@ function App() {
                 setAccounts(accntResponse);
                 // If we got accounts back, then store the token
                 if (currentToken && currentToken.value) {
-                    localStorage.setItem('token', JSON.stringify(currentToken));
+                    if ((document.getElementById('chkStoreToken') as HTMLInputElement)?.checked) { // Only store the token if user requested
+                        localStorage.setItem('token', JSON.stringify(currentToken));
+                    }
                     setToken(currentToken);
                 }
-            } else {
+            } else if (accntResponse === null) {  // If the response is null, that means we got an unauthorized response
                 // Delete localstorage
-                // localStorage.removeItem('token');
-                // if (currentToken && (!token || !token.value)) {
-                    // setToken(undefined);
-                // }
+                localStorage.removeItem('token');
+                if (currentToken && (!token || !token.value)) {
+                    setToken(undefined);
+                }
+                ApiService.reset();
             }
         }).catch(e => {
             console.log('could not get accounts', e);
@@ -385,7 +388,7 @@ function App() {
                             }}
                         />
                         <br/>
-                        <FormControlLabel control={<Checkbox defaultChecked />} label="Store Token for next time" />
+                        <FormControlLabel control={<Checkbox id={'chkStoreToken'} />} label="Store Token for next time" />
                     </Box>
                 </Collapse>
                 <Collapse in={!!token && showFileDrop}>

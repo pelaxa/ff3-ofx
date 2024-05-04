@@ -145,7 +145,7 @@ Note: These instructions are for a docker installation but should hopefully be c
 9.  Browse to the application: `https://<your FF3 domain>/ofx` and you should be prompted to input a token.  
 10. (Optional) You can bookmark or add this URL to whatever dashboard you are using for future use.
 11. Enter you PAT into the text box and hit the tab key.\
-    Note: Right now the checkbox below the input field does not work but a future version will allow you not to store the token locally (i.e. you would have to enter the token each time you use the app if you do not save it).
+    Note: If you do not want to enter your PAT each time, make sure to check `Store token for next time`.
 12. You should be ready to drop an OFX file and get importing.
 
 
