@@ -1,6 +1,6 @@
 {
   "name": "ff3-ofx",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "homepage": "./",
   "private": true,
   "licenses": [
@@ -11,23 +11,23 @@
     }
   ],
   "dependencies": {
-    "@emotion/react": "^11.11.3",
-    "@emotion/styled": "^11.11.0",
-    "@mui/icons-material": "^5.15.10",
-    "@mui/material": "^5.15.6",
+    "@emotion/react": "^11.13.0",
+    "@emotion/styled": "^11.13.0",
+    "@mui/icons-material": "^5.16.7",
+    "@mui/material": "^5.16.7",
     "@testing-library/dom": "^9.3.4",
-    "@testing-library/jest-dom": "^5.14.1",
-    "@testing-library/react": "^13.0.0",
-    "@testing-library/user-event": "^13.2.1",
-    "axios": "^1.6.8",
+    "@testing-library/jest-dom": "^5.17.0",
+    "@testing-library/react": "^13.4.0",
+    "@testing-library/user-event": "^13.5.0",
+    "axios": "^1.7.4",
     "moment": "^2.30.1",
     "mui-file-dropzone": "^4.0.2",
     "node-ofx-parser": "^0.5.1",
     "prop-types": "^15.8.1",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
     "react-scripts": "5.0.1",
-    "web-vitals": "^2.1.0"
+    "web-vitals": "^2.1.4"
   },
   "scripts": {
     "start": "react-scripts start",
@@ -57,10 +57,10 @@
     ]
   },
   "devDependencies": {
-    "@babel/core": "^7.23.9",
+    "@babel/core": "^7.25.2",
     "@babel/plugin-proposal-private-property-in-object": "^7.21.11",
-    "eslint": "^8.18.0",
-    "typescript": "^4.7.4"
+    "eslint": "^8.57.0",
+    "typescript": "^4.9.5"
   },
   "packageManager": "yarn@4.1.0"
 }

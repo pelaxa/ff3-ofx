@@ -3,9 +3,10 @@ import ApiService from './lib/apiService';
 import Utils from './lib/utils';
 import moment from 'moment';
 import './App.css';
-import { FF3Account, FF3AddTransactionWrapper, FF3Error, FF3TransactionSplit, FF3TransactionType, FF3Wrapper, OfxData, OfxParsedTransaction } from 'lib/interfaces';
+import { FF3Account, FF3AddTransactionWrapper, FF3Error, FF3TransactionSplit, FF3TransactionType, FF3Wrapper, IntuitBankInfo, OfxData, OfxParsedTransaction } from 'lib/interfaces';
 import Button from '@mui/material/Button';
 import RefreshIcon from '@mui/icons-material/Refresh';
+import CheckIcon from '@mui/icons-material/Check';
 import { Box, Checkbox, Collapse, FormControlLabel, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography } from '@mui/material';
 import FileDrop from 'components/FileDrop';
 import * as OFXParser from 'node-ofx-parser';
@@ -17,8 +18,10 @@ import OfxTransactionsRow from 'components/OfxTransactionsRow';
 const importTag = `OFX Import ${moment().format('YYYY-MM-DD HH:mm:ss')}`;
 
 
-const ERROR_FILE_COUNT_TYPE = 'Please only drop 1 file of type OFX in this area';
+const ERROR_FILE_COUNT_TYPE = 'Please only drop 1 file of type OFX or QFX in this area';
+const ERROR_NO_ACCOUNT = 'Please setup some accounts to be able to process transactions';
 const ERROR_MATCH_ACCOUNT = 'Could not find a matching account to process transactions';
+const ERROR_MATCH_MULTIPLE_ACCOUNT = 'Found multiple matching accounts';
 
 interface Token {
     value: string;
@@ -30,6 +33,10 @@ function App() {
     const [accounts, setAccounts] = useState<FF3Wrapper<FF3Account>[]>();
     // The selected account for which transactions are being processed
     const [selectedAccount, setSelectedAccount] = useState<FF3Wrapper<FF3Account>>();
+    // The selected account for which transactions are being processed
+    const [matchingAccounts, setMatchingAccounts] = useState<FF3Wrapper<FF3Account>[]>();
+    // Bank name
+    const [bankName, setBankName] = useState<string>('');
     // These are the processed transactions
     const [transactions, setTransactions] = useState<OfxParsedTransaction[]>([]);
     // The transactions parsed from OFX
@@ -45,8 +52,8 @@ function App() {
     /**
      * Fetch the list of accounts
      */
-    const init = useCallback( async (currentToken?: Token) => {
-        ApiService.getAccounts(currentToken?.value).then( accntResponse => {
+    const init = useCallback(async (currentToken?: Token) => {
+        ApiService.getAccounts(currentToken?.value).then(accntResponse => {
             if (accntResponse && accntResponse.length > 0) {
                 setAccounts(accntResponse);
                 // If we got accounts back, then store the token
@@ -70,23 +77,23 @@ function App() {
             // localStorage.removeItem('token');
             // setToken(undefined);
         });
-    },[]);
+    }, []);
 
-    const showFile = useCallback ( (files: File[]) => {
+    const showFile = useCallback((files: File[]) => {
         console.log('showFile files[0].name', files[0]);
         setErrorMessage('');
 
-        if (files.length > 1 || (files[0] && !(/\.ofx$/gi).test(files[0].name))) {
+        if (files.length > 1 || (files[0] && !(/\.(ofx|qfx)$/gi).test(files[0].name))) {
             console.log('Too many files');
             setErrorMessage(ERROR_FILE_COUNT_TYPE);
             return;
-        } else if(files.length === 1) {
+        } else if (files.length === 1) {
             // Reset our state before reading the new file
             if (ofxData) setOfxData(undefined);
+            if (matchingAccounts) setMatchingAccounts(undefined);
             if (selectedAccount) setSelectedAccount(undefined);
             if (transactions && transactions.length > 0) setTransactions([]);
             // setTxnIdx(0);
-            if (processed) setProcessed(false);
             if (progress !== 0) setProgress(0);
 
             // console.log('parsing ofx with new lib...');
@@ -100,8 +107,8 @@ function App() {
 
 
             const reader = new FileReader();
-            reader.onload = (e:ProgressEvent<FileReader>) => {
-                console.log('file content', e);
+            reader.onload = (e: ProgressEvent<FileReader>) => {
+                console.debug('file content', e);
                 const parsedData = OFXParser.parse(e.target?.result);
                 // console.debug(parsedData);
                 const tmpOfxData = Utils.getOfxData(parsedData);
@@ -111,25 +118,59 @@ function App() {
                         return account.attributes.account_number === tmpOfxData.accountNumber;
                     });
                     if (theAccount) {
+                        setProcessed(false);
                         setShowFileDrop(false);
                         setSelectedAccount(theAccount);
                         setOfxData(tmpOfxData);
                     } else {
                         console.log('NO matching account found...');
-                        setErrorMessage(ERROR_MATCH_ACCOUNT);
+                        // It is possible that the account number is masked so do a secondary search
+                        if (tmpOfxData.accountNumber && tmpOfxData.accountNumber.indexOf('*') > -1) {
+                            const tmpAccountNumber = new RegExp(tmpOfxData.accountNumber.replace(/\*{1,}/, '.*'));
+                            console.log('account regex: ' + tmpAccountNumber);
+                            // Now loop thru again and see if we can find any matching account
+                            const partialMatchedAccounts = accounts.filter(account => {
+                                return tmpAccountNumber.test(account.attributes.account_number || '');
+                            });
+                            console.log('matching accounts: ' + matchingAccounts);
+                            if (partialMatchedAccounts) {
+                                setShowFileDrop(false);
+                                setOfxData(tmpOfxData);
+                                if (partialMatchedAccounts.length === 1) {
+                                    setProcessed(false);
+                                    setSelectedAccount(partialMatchedAccounts[0]);
+                                } else if (partialMatchedAccounts.length > 1) {
+                                    // Find the bank name
+                                    setBankName(require('./lib/bankinfo.json').find((info: IntuitBankInfo) => {
+                                        return info.id1 === tmpOfxData.intuitId;
+                                    })?.name);
+                                    setMatchingAccounts(partialMatchedAccounts);
+                                    setErrorMessage(ERROR_MATCH_MULTIPLE_ACCOUNT);
+                                }
+                            } else {
+                                setErrorMessage(ERROR_MATCH_ACCOUNT);
+                            }
+                        } else {
+                            setErrorMessage(ERROR_MATCH_ACCOUNT);
+                        }
                     }
                 } else {
                     console.log('No accounts to find a match with...');
+                    setErrorMessage('ERROR_NO_ACCOUNT');
                 }
             };
-            
+
             // start reading the new file (This will trigger the onload event above)
             reader.readAsText(files[0]);
         }
     }, [accounts, ofxData, processed, progress, selectedAccount, transactions]);
-    
 
-    
+    const selectAccount = async (accnt: FF3Wrapper<FF3Account>) => {
+        setProcessed(false);
+        setSelectedAccount(accnt);
+        setMatchingAccounts(undefined);
+    };
+
 
     // This method adds a new transaction to the Firefly account based on user request
     const addAnyways = async (existingTxn: OfxParsedTransaction) => {
@@ -141,7 +182,7 @@ function App() {
                 console.log('Added new transaction (anyways) successfully', newTransaction);
                 setTransactions([...transactions]);
                 // Change progress so that the summary also updates
-                setProgress(progress+1);
+                setProgress(progress + 1);
             }
         }
     };
@@ -167,7 +208,7 @@ function App() {
             };
         }
         return newTransaction;
-    },[]);
+    }, []);
 
     const processTransactions = useCallback(async () => {
         // Process each transaction by
@@ -188,7 +229,7 @@ function App() {
             if (parsedTxn) {
                 // We do this to make sure we only have 2 digit decimals
                 const parsedAmount = parsedTxn.amount ? parseFloat(parsedTxn.amount.toFixed(2)) : 0;
-                            
+
                 console.log('Processing OFX transaction', parsedTxn.description, parsedTxn);
 
                 const relatedTransactions = await ApiService.getAccountTransactions(
@@ -343,7 +384,7 @@ function App() {
         } else if (transactions) {
             console.log('transactions updated', transactions);
         }
-    },[accounts, init, ofxData, processTransactions, processed, selectedAccount, transactions]);
+    }, [accounts, init, ofxData, processTransactions, processed, selectedAccount, transactions]);
 
     /**
      * Read the token anytime the screen is refreshed.
@@ -360,16 +401,16 @@ function App() {
             }
         }
     }, [accounts, init]);
-    
 
-    const bankBalance: number = ofxData ? parseFloat(parseFloat(''+ofxData.balance).toFixed(2)) : 0;
-    
+
+    const bankBalance: number = ofxData ? parseFloat(parseFloat('' + ofxData.balance).toFixed(2)) : 0;
+
     return (
         <div className="App">
             <div className="App-header">
                 <Collapse in={!token}>
-                    <Box sx={{width: '50%', margin: '0 auto'}}>
-                        <Typography variant='h5' sx={{m:5}}>Provide your FireFlyIII token below.  Just tab out of the field when done, 
+                    <Box sx={{ width: '50%', margin: '0 auto' }}>
+                        <Typography variant='h5' sx={{ m: 5 }}>Provide your FireFlyIII token below.  Just tab out of the field when done,
                             but do not forget to check the store box if you would like to store the key for next time.</Typography>
                         <TextField
                             required
@@ -378,16 +419,16 @@ function App() {
                             variant="filled"
                             id="outlined-password-input"
                             label="FF3 Token"
-                            sx={{width: '60ch'}}
+                            sx={{ width: '60ch' }}
                             type="password"
                             autoComplete="current-password"
                             onBlur={(event: React.FocusEvent<HTMLInputElement, Element>) => {
                                 if (event.target.value.trim().length > 0) {
-                                    init({"value": `${event.target.value.trim()}`})
+                                    init({ "value": `${event.target.value.trim()}` })
                                 }
                             }}
                         />
-                        <br/>
+                        <br />
                         <FormControlLabel control={<Checkbox id={'chkStoreToken'} />} label="Store Token for next time" />
                     </Box>
                 </Collapse>
@@ -395,14 +436,51 @@ function App() {
                     <FileDrop text={'Drop an OFX file or click below to start the import'} errorMessage={errorMessage} fileLimit={1} onChange={showFile} />
                     <Button variant="contained" color="secondary" onClick={() => { localStorage.removeItem('token'); window.location.reload(); }}><RefreshIcon /> &nbsp;Reset Token!</Button>
                 </Collapse>
-                <Collapse in={!!token && !showFileDrop}>
+                <Collapse in={!!token && !showFileDrop && processed}>
                     <Button variant="contained" onClick={() => { window.location.reload(); }}><RefreshIcon /> &nbsp;New Import!</Button>
-                    <br/><br/>
+                    <br /><br />
+                </Collapse>
+                <Collapse in={!!token && !showFileDrop && !!matchingAccounts && matchingAccounts.length > 1}>
+                    <Typography variant='h5' sx={{ m: 5 }}>Multiple accounts matches found!  Please select one of the accounts below to import the transactions</Typography>
+                    <div className="scrollview" >
+                        <TableContainer component={Paper} sx={{ minWidth: 900, maxWidth: '60%', maxHeight: '70vh', margin: '0 auto' }}>
+                            <Table stickyHeader aria-label="collapsible sticky table">
+                                <TableHead>
+                                    <TableRow>
+                                        <TableCell colSpan={3} style={{backgroundColor: '#eee'}}>
+                                            <Typography sx={{ m: 1 }}>
+                                                <b>Account Number:</b> {ofxData?.accountNumber}, <b>Account Type:</b> {ofxData?.accountType}, <b>Org:</b> {ofxData?.org}, <b>Bank:</b> {bankName} ({ofxData?.intuitId})
+                                            </Typography>
+                                        </TableCell>
+                                    </TableRow>
+                                    <TableRow className="Header-Row">
+                                        <TableCell className="Header-Row">Name</TableCell>
+                                        <TableCell align="center">Details</TableCell>
+                                        <TableCell align="center">Action</TableCell>
+                                    </TableRow>
+                                </TableHead>
+                                <TableBody>
+                                    {matchingAccounts?.map((accnt, idx) => (
+                                        <TableRow key={`ofxAccnt_${accnt.attributes.account_number}`}>
+                                            <TableCell>{accnt.attributes.name}</TableCell>
+                                            <TableCell><b>Account Number:</b> {accnt.attributes.account_number}<br /><b>IBAN:</b> {accnt.attributes.iban}<br /><b>BIC:</b> {accnt.attributes.bic}</TableCell>
+                                            <TableCell align="center">
+                                                <Button
+                                                    variant="contained"
+                                                    onClick={() => selectAccount(accnt)}>
+                                                    <CheckIcon /> Select
+                                                </Button>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </TableContainer>
+                    </div>
                 </Collapse>
                 {transactions && transactions.length > 0 && (
                     <>
                         <Summary bankBalance={bankBalance} accountId={selectedAccount?.id} processed={processed} progress={progress} />
-                        <br />
                         <div className="scrollview" >
                             <TableContainer component={Paper} sx={{ minWidth: 900, maxWidth: '60%', maxHeight: '70vh', margin: '0 auto' }}>
                                 <Table stickyHeader aria-label="collapsible sticky table">

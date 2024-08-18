@@ -45,7 +45,7 @@ const Summary = (props: SummaryProps) => {
     
 
     return (
-        <Box sx={{ minWidth: 900, maxWidth: '60%' }}>
+        <Box sx={{ minWidth: 900, maxWidth: '60%' }} pb={2}>
             {props.bankBalance !== accountBalance && (
                 <Alert severity="warning">
                     The bank balance does not match your account balance. Look for transactions that may

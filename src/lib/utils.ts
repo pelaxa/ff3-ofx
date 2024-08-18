@@ -12,6 +12,9 @@ class Utils {
     static getOfxData(ofxDataIn: any) {
         const ofxData: OfxData = {
             accountNumber: undefined,
+            accountType: undefined,
+            org: undefined,
+            intuitId: undefined,
             balance: undefined,
             balanceDate: undefined,
             startDate: undefined,
@@ -20,9 +23,14 @@ class Utils {
         };
         
         let ofxTransactions: OfxTransaction[]|null = null;
+        // Set common settings here
+        ofxData.org = ofxDataIn.OFX.SIGNONMSGSRSV1.SONRS.FI?.ORG;
+        ofxData.intuitId = ofxDataIn.OFX.SIGNONMSGSRSV1.SONRS.INTUBID;
+            
         if (ofxDataIn.OFX.CREDITCARDMSGSRSV1) {
             // If this is a credit card account
             ofxData.accountNumber = ofxDataIn.OFX.CREDITCARDMSGSRSV1.CCSTMTTRNRS.CCSTMTRS.CCACCTFROM.ACCTID;
+            ofxData.accountType = "CREDITCARD";
             ofxData.balance = ofxDataIn.OFX.CREDITCARDMSGSRSV1.CCSTMTTRNRS.CCSTMTRS.LEDGERBAL.BALAMT;
             ofxData.balanceDate = Utils.ofxDateToFF3(
                 ofxDataIn.OFX.CREDITCARDMSGSRSV1.CCSTMTTRNRS.CCSTMTRS.LEDGERBAL.DTASOF,
@@ -37,6 +45,7 @@ class Utils {
         } else if (ofxDataIn.OFX.BANKMSGSRSV1) {
             // If this is a checking or savings account
             ofxData.accountNumber = ofxDataIn.OFX.BANKMSGSRSV1.STMTTRNRS.STMTRS.BANKACCTFROM.ACCTID;
+            ofxData.accountType = ofxDataIn.OFX.BANKMSGSRSV1.STMTTRNRS.STMTRS.BANKACCTFROM.ACCTTYPE;
             ofxData.balance = ofxDataIn.OFX.BANKMSGSRSV1.STMTTRNRS.STMTRS.LEDGERBAL?.BALAMT || '?';
             ofxData.balanceDate = Utils.ofxDateToFF3(ofxDataIn.OFX.BANKMSGSRSV1.STMTTRNRS.STMTRS.LEDGERBAL?.DTASOF) || '?';
             ofxData.startDate = Utils.ofxDateToFF3(ofxDataIn.OFX.BANKMSGSRSV1.STMTTRNRS.STMTRS.BANKTRANLIST?.DTSTART) || '?';
@@ -102,7 +111,7 @@ class Utils {
      * @returns 
      */
     static parseOfxTransaction(txn: OfxTransaction): OfxParsedTransaction | null {
-        console.log('TXN to parse', txn);
+        console.debug('TXN to parse', txn);
         if (txn) {
         return {
             transactionId: txn.FITID,

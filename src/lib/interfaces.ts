@@ -1,5 +1,12 @@
 import { Moment } from 'moment';
 
+
+export interface IntuitBankInfo {
+    id1: string;
+    id2: string;
+    id3: string;
+    name: string;
+}
 export interface OfxTransaction {
     TRNTYPE: string;
     DTPOSTED: string;
@@ -11,6 +18,9 @@ export interface OfxTransaction {
 
 export interface OfxData {
     accountNumber?: string;
+    accountType?: string;
+    org?: string;
+    intuitId?: string;
     balance?: number;
     balanceDate?: Moment;
     startDate?: Moment;
