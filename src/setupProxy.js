@@ -1,6 +1,6 @@
 // import secrets from './secrets.json';
 
-const { createProxyMiddleware } = require('http-proxy-middleware');
+import { createProxyMiddleware } from 'http-proxy-middleware';
 const secrets = require('./secrets.json');
 
 module.exports = function(app) {

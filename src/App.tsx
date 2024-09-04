@@ -77,7 +77,7 @@ function App() {
             // localStorage.removeItem('token');
             // setToken(undefined);
         });
-    }, []);
+    }, [token]);
 
     const showFile = useCallback((files: File[]) => {
         console.log('showFile files[0].name', files[0]);
@@ -124,13 +124,15 @@ function App() {
                         setOfxData(tmpOfxData);
                     } else {
                         console.log('NO matching account found...');
-                        // It is possible that the account number is masked so do a secondary search
-                        if (tmpOfxData.accountNumber && tmpOfxData.accountNumber.indexOf('*') > -1) {
-                            const tmpAccountNumber = new RegExp(tmpOfxData.accountNumber.replace(/\*{1,}/, '.*'));
+                        // It is possible that the account number is masked, or it contains other characters than a-z or 0-9
+                        // so do a secondary search
+                        if (tmpOfxData.accountNumber && !theAccount) {
+                            const tmpAccountNumber = new RegExp(tmpOfxData.accountNumber.replace(/[^0-9|a-z|*]/gi, '').replace(/\*{1,}/, '.*'));
                             console.log('account regex: ' + tmpAccountNumber);
                             // Now loop thru again and see if we can find any matching account
                             const partialMatchedAccounts = accounts.filter(account => {
-                                return tmpAccountNumber.test(account.attributes.account_number || '');
+                                console.info('matching accounts... Comparing: ', tmpAccountNumber, account.attributes.account_number?.replace(/[^0-9|a-z]/gi, ''));
+                                return tmpAccountNumber.test(account.attributes.account_number?.replace(/[^0-9|a-z]/gi, '') || '');
                             });
                             console.log('matching accounts: ' + matchingAccounts);
                             if (partialMatchedAccounts) {
@@ -156,14 +158,14 @@ function App() {
                     }
                 } else {
                     console.log('No accounts to find a match with...');
-                    setErrorMessage('ERROR_NO_ACCOUNT');
+                    setErrorMessage(ERROR_NO_ACCOUNT);
                 }
             };
 
             // start reading the new file (This will trigger the onload event above)
             reader.readAsText(files[0]);
         }
-    }, [accounts, ofxData, processed, progress, selectedAccount, transactions]);
+    }, [accounts, ofxData, progress, selectedAccount, transactions, matchingAccounts]);
 
     const selectAccount = async (accnt: FF3Wrapper<FF3Account>) => {
         setProcessed(false);
