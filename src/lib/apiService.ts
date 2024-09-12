@@ -17,11 +17,12 @@ const reset = () => {
     myHttpClient = undefined;
 }
 
-const getHttp = (token?: string| null) => {
+const getHttp = (token?: string| null, url?: string | null) => {
     if (token === null) {
-        myHttpClient = undefined;
-    } else if (!myHttpClient && token) {
+        reset();
+    } else if (token) {
         console.info('Creating http client...');
+        reset();
         myHttpClient = axios.create({
             baseURL: BASE_URL,
             headers: {
@@ -30,9 +31,39 @@ const getHttp = (token?: string| null) => {
             'Authorization': `Bearer ${token}`
             },
         });
+    } else if (!!url) {
+        reset();
+        myHttpClient = axios.create({
+            baseURL: url,
+            headers: {
+            'Content-type': 'application/json',
+            'Accept': 'application/json'
+            },
+        });
     }
 
     return myHttpClient;
+}
+
+const getLatestVersion = async(): Promise<string | null> => {
+    const response = await axios.get('https://api.github.com/repos/pelaxa/ff3-ofx/tags',{
+        headers: {
+            'Content-type': 'application/json',
+            'Accept': 'application/json'
+        },
+        ...exceptionHandling
+    } );
+
+    if (response && response.status) {
+        if (response.status === 200 && response.data.length > 0) {
+            console.info('tags', response.data);
+            return response.data[0].name;  // latest tag is on top
+          }
+    }
+
+    // Return null
+    return null;
+
 }
 
 const getAccounts = async(currentToken?: string): Promise<FF3Wrapper<FF3Account>[] | null> => {
@@ -138,6 +169,7 @@ const ApiService = {
     getTransactions,
     getAccountTransactions,
     addTransaction,
+    getLatestVersion,
 };
 
 export default ApiService;

@@ -7,7 +7,7 @@ import { FF3Account, FF3AddTransactionWrapper, FF3Error, FF3TransactionSplit, FF
 import Button from '@mui/material/Button';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import CheckIcon from '@mui/icons-material/Check';
-import { Box, Checkbox, Collapse, FormControlLabel, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography } from '@mui/material';
+import { Alert, Box, Checkbox, Collapse, FormControlLabel, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography } from '@mui/material';
 import FileDrop from 'components/FileDrop';
 import * as OFXParser from 'node-ofx-parser';
 import Summary from 'components/Summary';
@@ -48,6 +48,17 @@ function App() {
     // The current progress for the transactions being processed
     const [showFileDrop, setShowFileDrop] = useState(true);
     const [errorMessage, setErrorMessage] = useState<string>('');
+    // Set to true if an update is available
+    const [updateAvailable, setUpdateAvailable] = useState(false);
+
+    const checkForUpdates = useCallback(async () => {
+        const myVersion = `${process.env.REACT_APP_VERSION}`;
+        const latestVersion = await ApiService.getLatestVersion();
+        if (myVersion !== latestVersion?.substring(1)) {
+            console.error('THERE IS A NEW VERSION OUT', myVersion, latestVersion);
+            setUpdateAvailable(true);
+        }
+    }, []);
 
     /**
      * Fetch the list of accounts
@@ -404,11 +415,20 @@ function App() {
         }
     }, [accounts, init]);
 
+    useEffect(() => {
+        checkForUpdates();
+    }, [checkForUpdates]);
+
 
     const bankBalance: number = ofxData ? parseFloat(parseFloat('' + ofxData.balance).toFixed(2)) : 0;
 
     return (
         <div className="App">
+            {updateAvailable && (
+                <Alert variant="filled" severity="info">
+                    You are currently running <b>{process.env.REACT_APP_NAME}</b> version <b>{process.env.REACT_APP_VERSION}</b>.  There is a new version available <a href="https://github.com/pelaxa/ff3-ofx/releases/latest" target="_new">here</a>.
+                </Alert>
+            )}
             <div className="App-header">
                 <Collapse in={!token}>
                     <Box sx={{ width: '50%', margin: '0 auto' }}>
@@ -449,7 +469,7 @@ function App() {
                             <Table stickyHeader aria-label="collapsible sticky table">
                                 <TableHead>
                                     <TableRow>
-                                        <TableCell colSpan={3} style={{backgroundColor: '#eee'}}>
+                                        <TableCell colSpan={3} style={{ backgroundColor: '#eee' }}>
                                             <Typography sx={{ m: 1 }}>
                                                 <b>Account Number:</b> {ofxData?.accountNumber}, <b>Account Type:</b> {ofxData?.accountType}, <b>Org:</b> {ofxData?.org}, <b>Bank:</b> {bankName} ({ofxData?.intuitId})
                                             </Typography>
