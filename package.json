@@ -32,7 +32,7 @@
     "dev": "vite",
     "start": "vite preview",
     "compile": "tsc -b && vite build",
-    "dist": "rm -f ./dist/*.gz ; tar -s \"/^dist/ff3-ofx/\" -cvzf dist/ff3-ofx-${npm_package_version}.zip dist/*",
+    "dist": "rm -f ./dist/*.gz ; tar -s \"/^dist/ff3-ofx/\" -cvzf dist/ff3-ofx-${npm_package_version}.tar.gz dist/*",
     "package": "rm -rf ./dist/* ; yarn compile && yarn dist",
     "test": "vitest",
     "lint": "eslint src --ext js,jsx --report-unused-disable-directives --max-warnings 0",
