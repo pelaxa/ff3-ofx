@@ -1,8 +1,8 @@
-import React, { Fragment } from "react";
+import { Fragment } from "react";
 import moment from 'moment';
 import { Box, Collapse, Table, TableBody, TableCell, TableHead, TableRow } from "@mui/material";
-import { OfxParsedTransaction } from "lib/interfaces";
-import utils from "lib/utils";
+import { OfxParsedTransaction } from "@/lib/interfaces";
+import utils from "@/lib/utils";
 
 
 interface OfxTransactionRowProps {

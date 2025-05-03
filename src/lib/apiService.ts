@@ -1,5 +1,5 @@
-import { Moment } from 'moment';
-import { FF3Account, FF3AddTransactionWrapper, FF3Error, FF3Transaction, FF3TransactionSplit, FF3Wrapper } from './interfaces';
+import moment, { Moment } from 'moment';
+import { FF3Account, FF3AccountRole, FF3AddTransactionWrapper, FF3CreditCardType, FF3Error, FF3NewAccount, FF3ShortAccountType, FF3Transaction, FF3TransactionSplit, FF3Wrapper } from './interfaces';
 import axios, { AxiosInstance } from 'axios';
 
 export const BASE_URL = "/api/v1";
@@ -31,7 +31,7 @@ const getHttp = (token?: string| null, url?: string | null) => {
             'Authorization': `Bearer ${token}`
             },
         });
-    } else if (!!url) {
+    } else if (url) {
         reset();
         myHttpClient = axios.create({
             baseURL: url,
@@ -114,6 +114,28 @@ const getAccount = async(accountId: string): Promise<FF3Wrapper<FF3Account> | nu
     return null;
 };
 
+const createAccount = async(accountData: FF3NewAccount): Promise<FF3Wrapper<FF3Account> | null> => {
+    const http = getHttp();
+    let newAccountData: FF3Account = {
+        name: accountData.name,
+        type: FF3ShortAccountType.TYPE_ASSET, // Seems like there is AccountTypeProperty and ShortAccountTypeProperty, and the latter is used here: https://api-docs.firefly-iii.org/firefly-iii-2.0.10-v2.yaml
+        account_number: accountData.number,
+        account_role: accountData.role,
+        currency_code: accountData.currency
+    };
+    // Handle special case of Credit Card accounts
+    if (accountData.role == FF3AccountRole.CREDIT_CARD_ASSET) {
+        newAccountData.credit_card_type = FF3CreditCardType.MONTHLY_FULL;
+        newAccountData.monthly_payment_date = moment().format(DATE_FORMAT);
+    }
+    const response = await http?.post(`/accounts`, newAccountData, exceptionHandling);
+    console.log('Create Account status', response?.status, response?.status === 200, response?.data?.data);
+    if (response && response.status === 200 && response.data.data) {
+        return response.data.data;
+    } 
+    return null;
+};
+
 const getAccountTransactions = async (accountId: string, startDate?: Moment, endDate?: Moment): Promise<FF3Wrapper<FF3Transaction>[]> => {
     const http = getHttp();
     let queryString = '';
@@ -166,6 +188,7 @@ const ApiService = {
     getHttp,
     getAccounts,
     getAccount,
+    createAccount,
     getTransactions,
     getAccountTransactions,
     addTransaction,

@@ -5,9 +5,9 @@ This is a React application that can be used to import transactions using your f
 This is just a quick side project I revamped a little so that others may use it as well, but there are no real maintenance plans as of yet and it has only been tested for my personal use case so far so there may be bugs for certain situations.
 
 ## How it works
-The application attempts for fetch all of your accounts on startup.  If that fails, you are prompted to enter in your FF3 Personal Access Token (PAT) after which point the accounts are refetched and the application is ready to accept a new OFX file.
+The application attempts for fetch all of your accounts on startup.  If that fails, you are prompted to enter in your FF3 Personal Access Token (PAT) after which point the accounts are re-fetched and the application is ready to accept a new OFX file.
 
-Once an OFX file is dropped in the drop zone, it is read (in your browser) and the transactions parsed.  If a matching account was found in FF3, then the import starts by processing each transaction.
+Once an OFX file is dropped in the drop zone, it is read (in your browser) and the transactions parsed.  If a matching account was found in FF3, then the import starts by processing each transaction.  If an matching account is not found, you will be prompted to create a new account.
 
 For each transaction:\
 1. A list of matching transaction from the corresponding account is fetched for 3 days before to 3 days after the transaction date (no filtering, just all transactions between the two dates).
@@ -33,18 +33,61 @@ If neither of the above help, then do your investigation and create an issue.  *
 
 
 ## Development
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+This project was bootstrapped with [Vite](https://vite.dev/).  Also see: [https://hello-sunil.in/vite-setup-with-yarn/](https://hello-sunil.in/vite-setup-with-yarn/)
 
-In order to start the app in development mode, create a secrets.json file in the main folder (same level as setupProxy.js), and enter the following content:
+In order to start the app in development mode, create a .env.local file in the main folder (same level as package.json), and enter the following content:
 
 ```
-{
-    "proxyUrl": "https://<your FF3 FQDN>"
-}
+VITE_PROXY = "https://<your FF3 FQDN>"
 ```
-Since the above is using https, it is necessary to use the HTTPs startup script below.
 
-Note: The secrets.json file is in .gitignore so it will not be checked into the repository.
+Note: The .env.local file is in .gitignore so it will not be checked into the repository.
+
+## Expanding the ESLint configuration
+
+If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+
+```js
+export default tseslint.config({
+  extends: [
+    // Remove ...tseslint.configs.recommended and replace with this
+    ...tseslint.configs.recommendedTypeChecked,
+    // Alternatively, use this for stricter rules
+    ...tseslint.configs.strictTypeChecked,
+    // Optionally, add this for stylistic rules
+    ...tseslint.configs.stylisticTypeChecked,
+  ],
+  languageOptions: {
+    // other options...
+    parserOptions: {
+      project: ['./tsconfig.node.json', './tsconfig.app.json'],
+      tsconfigRootDir: import.meta.dirname,
+    },
+  },
+})
+```
+
+You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+
+```js
+// eslint.config.js
+import reactX from 'eslint-plugin-react-x'
+import reactDom from 'eslint-plugin-react-dom'
+
+export default tseslint.config({
+  plugins: {
+    // Add the react-x and react-dom plugins
+    'react-x': reactX,
+    'react-dom': reactDom,
+  },
+  rules: {
+    // other rules...
+    // Enable its recommended typescript rules
+    ...reactX.configs['recommended-typescript'].rules,
+    ...reactDom.configs.recommended.rules,
+  },
+})
+```
 
 ## Available Scripts
 
@@ -54,14 +97,15 @@ In the project directory, you can run:
 
 Installs the necessary node modules based on package.json.
 
-### `yarn start` <== To start without HTTPS
-### `HTTPS=true yarn start` <== to start with HTTPS
+### `yarn dev` <== to start in development mode
 
 Runs the app in the development mode.\
 Open [http://localhost:3000](http://localhost:3000) to view it in your browser if not using HTTPS, otherwise go open [https://localhost:3000](https://localhost:3000).
 
 The page will reload when you make changes.\
 You may also see any lint errors in the console.
+
+### `yarn start` <== To start in production mode
 
 <!-- ### `yarn test` <== TODO
 
@@ -71,7 +115,7 @@ See the section about [running tests](https://facebook.github.io/create-react-ap
 
 ### `yarn compile`
 
-Builds the app for production to the `build` folder.\
+Builds the app for production to the `dist` folder.\
 It correctly bundles React in production mode and optimizes the build for the best performance.
 
 The build is minified and the filenames include the hashes.\
@@ -81,60 +125,29 @@ See the section about [deployment](https://facebook.github.io/create-react-app/d
 
 ### `yarn dist`
 
-Creates a new zip file with the artifacts in the `build` folder.\
-It must be run after `yarn compile`.
+Creates a new tar file with the artifacts in the `dist` folder.  It must be run after `yarn compile`.
 
-Unpacking the zip file will create a ff3-ofx folder containing the application.
+Note that the tar command is MacOS specific and may not work on other Linux platforms.
+
+Unpacking the tar file will create a ff3-ofx folder containing the application.
 
 ### `yarn package`
 
 executes `yarn compile` and then `yarn dist`.
 
-### `yarn eject`
-
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
-
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
-
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
-
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
-
-<!-- ## Learn More
-
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
-
-To learn React, check out the [React documentation](https://reactjs.org/).
-
-### Code Splitting
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
-
-### Analyzing the Bundle Size
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
-
-### Making a Progressive Web App
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
-
-### Advanced Configuration
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration) -->
-
 ## Deployment
 
-Once the application has been built, it produces a zip file that can be uploaded to your FF3 server.  This app currently only works if it is served from the same domain as your FF3 server, so the steps below help you get it installed in a subdirectory so that it can be easily accessed.
+Once the application has been built, it produces a tar file that can be uploaded to your FF3 server.  This app currently only works if it is served from the same domain as your FF3 server, so the steps below help you get it installed in a subdirectory so that it can be easily accessed.
 
 Note: These instructions are for a docker installation but should hopefully be clear enough for other installation types to figure out what is needed.
 
 1. Edit your [docker-compose](https://raw.githubusercontent.com/firefly-iii/docker/main/docker-compose.yml) file.
 2. Under the volumes section add the following entry, to map ff3-ofx folder to /ofx on your FF3 server.
-   ```
-    volumes:
-      ...
-      - ./ff3-ofx:/var/www/html/public/ofx
-   ```
+```
+  volumes:
+    ...
+    - ./ff3-ofx:/var/www/html/public/ofx
+```
 3. Unzip the build zip in the same folder as your docker-compose file.  This will produce the ff3-ofx folder and put all the build files under it.
 4. Make sure file permissions are good.  `chmod 755` should be good enough to browse the folders and read the files.
 5. Restart your FF3 server: `docker compose down; docker compose up -d`\
@@ -144,12 +157,6 @@ Note: These instructions are for a docker installation but should hopefully be c
 8. Create a new PAT and call it ff3-ofx.  Make sure to keep the token in a safe place in case you need it again later (and you will at some point).
 9.  Browse to the application: `https://<your FF3 domain>/ofx` and you should be prompted to input a token.  
 10. (Optional) You can bookmark or add this URL to whatever dashboard you are using for future use.
-11. Enter you PAT into the text box and hit the tab key.\
-    Note: If you do not want to enter your PAT each time, make sure to check `Store token for next time`.
+11. Enter you PAT into the text box and hit the login button.\
+    Note: If you do not want to enter your PAT each time, make sure to check `Store token for next time` before clicking the `Login` button.
 12. You should be ready to drop an OFX file and get importing.
-
-
-
-### `yarn build` fails to minify
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)

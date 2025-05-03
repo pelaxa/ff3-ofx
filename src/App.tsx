@@ -3,15 +3,16 @@ import ApiService from './lib/apiService';
 import Utils from './lib/utils';
 import moment from 'moment';
 import './App.css';
-import { FF3Account, FF3AddTransactionWrapper, FF3Error, FF3TransactionSplit, FF3TransactionType, FF3Wrapper, IntuitBankInfo, OfxData, OfxParsedTransaction } from 'lib/interfaces';
+import { FF3Account, FF3AccountRole, FF3AddTransactionWrapper, FF3Error, FF3NewAccount, FF3TransactionSplit, FF3TransactionType, FF3Wrapper, IntuitBankInfo, OfxData, OfxParsedTransaction } from '@/lib/interfaces';
 import Button from '@mui/material/Button';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import CheckIcon from '@mui/icons-material/Check';
-import { Alert, Box, Checkbox, Collapse, FormControlLabel, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography } from '@mui/material';
-import FileDrop from 'components/FileDrop';
+import { Alert, Box, Checkbox, Collapse, FormControlLabel, MenuItem, Paper, Select, SelectChangeEvent, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography } from '@mui/material';
 import * as OFXParser from 'node-ofx-parser';
-import Summary from 'components/Summary';
-import OfxTransactionsRow from 'components/OfxTransactionsRow';
+import Summary from './components/Summary';
+import OfxTransactionsRow from '@/components/OfxTransactionsRow';
+import FileDrop from '@/components/FileDrop';
+import BankInfo from '@/lib/bankinfo.json';
 // import { Ofx } from 'ofx-data-extractor';
 
 // Import tag used to identify the import
@@ -21,7 +22,9 @@ const importTag = `OFX Import ${moment().format('YYYY-MM-DD HH:mm:ss')}`;
 const ERROR_FILE_COUNT_TYPE = 'Please only drop 1 file of type OFX or QFX in this area';
 const ERROR_NO_ACCOUNT = 'Please setup some accounts to be able to process transactions';
 const ERROR_MATCH_ACCOUNT = 'Could not find a matching account to process transactions';
+const ERROR_NO_ACCOUNT_NO = 'The provided file does not include an account number to find a matching account.';
 const ERROR_MATCH_MULTIPLE_ACCOUNT = 'Found multiple matching accounts';
+const ERROR_NEW_ACCOUNT_FAILED = 'Could not create a new account. Please create the account in FireFlyIII before importing the transactions.';
 
 interface Token {
     value: string;
@@ -50,9 +53,12 @@ function App() {
     const [errorMessage, setErrorMessage] = useState<string>('');
     // Set to true if an update is available
     const [updateAvailable, setUpdateAvailable] = useState(false);
+    const [newAccountData, setNewAccountData] = useState<FF3NewAccount | undefined>();
+    // Disable the login button on startup
+    const [loginDisabled, setLoginDisabled] = useState(true);
 
     const checkForUpdates = useCallback(async () => {
-        const myVersion = `${process.env.REACT_APP_VERSION}`;
+        const myVersion = `${__APP_VERSION__}`;
         const latestVersion = await ApiService.getLatestVersion();
         if (myVersion !== latestVersion?.substring(1)) {
             console.error('THERE IS A NEW VERSION OUT', myVersion, latestVersion);
@@ -137,7 +143,7 @@ function App() {
                         console.log('NO matching account found...');
                         // It is possible that the account number is masked, or it contains other characters than a-z or 0-9
                         // so do a secondary search
-                        if (tmpOfxData.accountNumber && !theAccount) {
+                        if (tmpOfxData.accountNumber) {
                             const tmpAccountNumber = new RegExp(tmpOfxData.accountNumber.replace(/[^0-9|a-z|*]/gi, '').replace(/\*{1,}/, '.*'));
                             console.log('account regex: ' + tmpAccountNumber);
                             // Now loop thru again and see if we can find any matching account
@@ -145,8 +151,9 @@ function App() {
                                 console.info('matching accounts... Comparing: ', tmpAccountNumber, account.attributes.account_number?.replace(/[^0-9|a-z]/gi, ''));
                                 return tmpAccountNumber.test(account.attributes.account_number?.replace(/[^0-9|a-z]/gi, '') || '');
                             });
-                            console.log('matching accounts: ' + matchingAccounts);
-                            if (partialMatchedAccounts) {
+                            console.log('Partially matching accounts: ' + partialMatchedAccounts);
+                            if (Array.isArray(partialMatchedAccounts) && partialMatchedAccounts.length > 0) {
+                                console.info('Found a partial match...');
                                 setShowFileDrop(false);
                                 setOfxData(tmpOfxData);
                                 if (partialMatchedAccounts.length === 1) {
@@ -154,17 +161,41 @@ function App() {
                                     setSelectedAccount(partialMatchedAccounts[0]);
                                 } else if (partialMatchedAccounts.length > 1) {
                                     // Find the bank name
-                                    setBankName(require('./lib/bankinfo.json').find((info: IntuitBankInfo) => {
-                                        return info.id1 === tmpOfxData.intuitId;
-                                    })?.name);
+                                    setBankName(
+                                        BankInfo.find((info: IntuitBankInfo) => {
+                                            return info.id1 === tmpOfxData.intuitId;
+                                        }
+                                    )?.name || '');
                                     setMatchingAccounts(partialMatchedAccounts);
                                     setErrorMessage(ERROR_MATCH_MULTIPLE_ACCOUNT);
                                 }
                             } else {
+                                // Let us ask the user if they want to create an account
+                                const bankName = BankInfo.find((info: IntuitBankInfo) => {
+                                            return info.id1 === tmpOfxData.intuitId;
+                                        }
+                                    )?.name || '';
+                                setBankName(bankName);
+                                console.log('tmpOfxData?.accountType?.toLowerCase()', tmpOfxData?.accountType?.toLowerCase());
+                                console.log('tmpOfxData ROLE', tmpOfxData?.accountType?.toLowerCase() === 'savings' ? FF3AccountRole.SAVING_ASSET : tmpOfxData?.accountType?.toLowerCase() === 'checking' ? FF3AccountRole.DEFAULT_ASSET : FF3AccountRole.CREDIT_CARD_ASSET);
+                                console.log('tmpOfxData?.accountType', tmpOfxData?.accountType);
+                                console.log('tmpOfxData?.accountNumber', tmpOfxData?.accountNumber);
+                                console.log('tmpOfxData NAME', tmpOfxData?.accountType + ' ' + tmpOfxData?.accountNumber.substring(tmpOfxData.accountNumber.length-4));
+                                const role = tmpOfxData?.accountType?.toLowerCase() === 'savings' ? FF3AccountRole.SAVING_ASSET : tmpOfxData?.accountType?.toLowerCase() === 'checking' ? FF3AccountRole.DEFAULT_ASSET : FF3AccountRole.CREDIT_CARD_ASSET;
+                                setNewAccountData({
+                                    name: tmpOfxData?.accountType + ' ' + tmpOfxData?.accountNumber.substring(tmpOfxData.accountNumber.length-4),
+                                    number: tmpOfxData.accountNumber,
+                                    currency: tmpOfxData.currency,
+                                    role,
+                                    institution: tmpOfxData.org,
+                                    bank: bankName
+                                })
+                                setOfxData(tmpOfxData);
+                                setShowFileDrop(false);
                                 setErrorMessage(ERROR_MATCH_ACCOUNT);
                             }
                         } else {
-                            setErrorMessage(ERROR_MATCH_ACCOUNT);
+                            setErrorMessage(ERROR_NO_ACCOUNT_NO);
                         }
                     }
                 } else {
@@ -183,6 +214,26 @@ function App() {
         setSelectedAccount(accnt);
         setMatchingAccounts(undefined);
     };
+
+    const createAccount = async (accountData: FF3NewAccount | undefined) => {
+
+        if (accountData) {
+            console.dir('accountData: ', accountData);
+            const accnt = await ApiService.createAccount(accountData);
+
+            if (accnt) {
+                console.dir('GETTING READY TO IMPORT: ', accnt);
+                setNewAccountData(undefined);
+                setProcessed(false);
+                setSelectedAccount(accnt);
+                setMatchingAccounts(undefined);
+                return;
+            } 
+        }
+        console.error('FAILIED TO CREATED ACCOUNT');
+        setShowFileDrop(true);
+        setErrorMessage(ERROR_NEW_ACCOUNT_FAILED);
+    }
 
 
     // This method adds a new transaction to the Firefly account based on user request
@@ -422,11 +473,13 @@ function App() {
 
     const bankBalance: number = ofxData ? parseFloat(parseFloat('' + ofxData.balance).toFixed(2)) : 0;
 
+    console.warn('Account role:', newAccountData?.role);
+
     return (
         <div className="App">
             {updateAvailable && (
                 <Alert variant="filled" severity="info">
-                    You are currently running <b>{process.env.REACT_APP_NAME}</b> version <b>{process.env.REACT_APP_VERSION}</b>.  There is a new version available <a href="https://github.com/pelaxa/ff3-ofx/releases/latest" target="_new">here</a>.
+                    You are currently running <b>{__APP_NAME__}</b> version <b>{__APP_VERSION__}</b>.  There is a new version available <a href="https://github.com/pelaxa/ff3-ofx/releases/latest" target="_new">here</a>.
                 </Alert>
             )}
             <div className="App-header">
@@ -441,14 +494,26 @@ function App() {
                             variant="filled"
                             id="outlined-password-input"
                             label="FF3 Token"
-                            sx={{ width: '60ch' }}
+                            sx={{ width: '70ch' }}
                             type="password"
                             autoComplete="current-password"
-                            onBlur={(event: React.FocusEvent<HTMLInputElement, Element>) => {
+                            onChange={(event: React.ChangeEvent<HTMLInputElement>) => {
                                 if (event.target.value.trim().length > 0) {
-                                    init({ "value": `${event.target.value.trim()}` })
+                                    setLoginDisabled(false);
+                                } else {
+                                    setLoginDisabled(true);
                                 }
                             }}
+                            slotProps={{
+                                input: {
+                                    endAdornment: (
+                                        <Button variant="contained" disabled={loginDisabled} onClick={ () =>
+                                            init({ "value": `${(document.getElementById('outlined-password-input') as HTMLInputElement)?.value.trim()}` })
+                                        }>Login</Button>
+                                    ),
+                                },
+                              }}
+                            
                         />
                         <br />
                         <FormControlLabel control={<Checkbox id={'chkStoreToken'} />} label="Store Token for next time" />
@@ -482,7 +547,7 @@ function App() {
                                     </TableRow>
                                 </TableHead>
                                 <TableBody>
-                                    {matchingAccounts?.map((accnt, idx) => (
+                                    {matchingAccounts?.map((accnt) => (
                                         <TableRow key={`ofxAccnt_${accnt.attributes.account_number}`}>
                                             <TableCell>{accnt.attributes.name}</TableCell>
                                             <TableCell><b>Account Number:</b> {accnt.attributes.account_number}<br /><b>IBAN:</b> {accnt.attributes.iban}<br /><b>BIC:</b> {accnt.attributes.bic}</TableCell>
@@ -498,6 +563,103 @@ function App() {
                                 </TableBody>
                             </Table>
                         </TableContainer>
+                    </div>
+                </Collapse>
+                <Collapse in={!!token && !showFileDrop && !!newAccountData}>
+                    <Typography variant='h5' sx={{ m: 5 }}>No matching accounts were found.  Would you like to create the account?</Typography>
+                    <div className="scrollview" >
+                        <TableContainer component={Paper} sx={{ minWidth: 900, maxWidth: '60%', maxHeight: '70vh', margin: '0 auto' }}>
+                            <Table stickyHeader aria-label="collapsible sticky table">
+                                <TableBody>
+                                    <TableRow>
+                                        <TableCell align="right">
+                                            <Typography sx={{ m: 1 }}>
+                                                <b>Account Name:</b>
+                                            </Typography>
+                                        </TableCell>
+                                        <TableCell>
+                                            <TextField id="outlined-basic" fullWidth variant="outlined" defaultValue={newAccountData?.name} onBlur={(event: React.FocusEvent<HTMLInputElement>) => setNewAccountData({number: '', ...newAccountData, name: (event.target.value || '') } ) }/>
+                                        </TableCell>
+                                    </TableRow>
+                                    <TableRow>
+                                        <TableCell align="right">
+                                            <Typography sx={{ m: 1 }}>
+                                                <b>Account Number:</b>
+                                            </Typography>
+                                        </TableCell>
+                                        <TableCell>
+                                            <Typography sx={{ m: 1 }}>
+                                                <TextField id="outlined-basic" fullWidth variant="outlined" defaultValue={newAccountData?.number} onBlur={(event: React.FocusEvent<HTMLInputElement>) => setNewAccountData({name: '', ...newAccountData, number: (event.target.value || '???') } ) }/>
+                                            </Typography>
+                                        </TableCell>
+                                    </TableRow>
+                                    <TableRow>
+                                        <TableCell align="right">
+                                            <Typography sx={{ m: 1 }}>
+                                                <b>Currency:</b>
+                                            </Typography>
+                                        </TableCell>
+                                        <TableCell>
+                                            <Typography sx={{ m: 1 }}>
+                                                {newAccountData?.currency}
+                                            </Typography>
+                                        </TableCell>
+                                    </TableRow>
+                                    <TableRow>
+                                        <TableCell align="right">
+                                            <Typography sx={{ m: 1 }}>
+                                                <b>Account Type:</b>
+                                            </Typography>
+                                        </TableCell>
+                                        <TableCell>
+                                            <Select
+                                                id="demo-simple-select"
+                                                value={newAccountData?.role || 'defaultAsset'}
+                                                label="Type"
+                                                onChange={(event: SelectChangeEvent) => {
+                                                    setNewAccountData({number: '', name: '', ...newAccountData, role: event.target.value as FF3AccountRole });
+                                                  }}
+                                            >
+                                                <MenuItem value={'defaultAsset'}>Default Asset ({newAccountData?.role})</MenuItem>
+                                                <MenuItem value={'sharedAsset'}>Shared Asset</MenuItem>
+                                                <MenuItem value={'savingAsset'}>Savings Asset</MenuItem>
+                                                <MenuItem value={'ccAsset'}>Credit Card</MenuItem>
+                                                <MenuItem value={'cashWalletAsset'}>Cash Wallet</MenuItem>
+                                            </Select>
+                                        </TableCell>
+                                    </TableRow>
+                                    { newAccountData?.institution && (<TableRow>
+                                        <TableCell align="right">
+                                            <Typography sx={{ m: 1 }}>
+                                                <b>Institution:</b>
+                                            </Typography>
+                                        </TableCell>
+                                        <TableCell>
+                                            <Typography sx={{ m: 1 }}>
+                                                {newAccountData?.institution}
+                                            </Typography>
+                                        </TableCell>
+                                    </TableRow>
+                                    )}
+                                    { newAccountData?.bank && (<TableRow>
+                                        <TableCell align="right">
+                                            <Typography sx={{ m: 1 }}>
+                                                <b>Bank:</b>
+                                            </Typography>
+                                        </TableCell>
+                                        <TableCell>
+                                            <Typography sx={{ m: 1 }}>
+                                                {newAccountData?.bank}
+                                            </Typography>
+                                        </TableCell>
+                                    </TableRow>
+                                    )}
+                                </TableBody>
+                            </Table>
+                        </TableContainer>
+                        <br/><br/>
+                        <Button variant="outlined" size="small" color="secondary" onClick={() => { window.location.reload() }}>Cancel</Button> &nbsp;
+                        <Button variant="contained" size="small" color="success" onClick={() => { createAccount(newAccountData) }}>Add Account</Button> 
                     </div>
                 </Collapse>
                 {transactions && transactions.length > 0 && (

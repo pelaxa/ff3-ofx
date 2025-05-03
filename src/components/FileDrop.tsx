@@ -1,7 +1,7 @@
 import { Alert, Box, Collapse, IconButton } from "@mui/material";
 import CloseIcon from '@mui/icons-material/Close';
 import { DropzoneArea } from "mui-file-dropzone";
-import React, { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 
 interface FileDropProps {
@@ -43,7 +43,7 @@ const FileDrop = (props: FileDropProps) => {
             <p>{props.text}</p>
             <Box component="section" minWidth={400} height={130}>
                 {!showError && (
-                    <DropzoneArea fileObjects={null} dropzoneClass="drop_zone" filesLimit={props.fileLimit} showPreviews={false} showPreviewsInDropzone={true} useChipsForPreview={true} 
+                    <DropzoneArea dropzoneClass="drop_zone" filesLimit={props.fileLimit} showPreviews={false} showPreviewsInDropzone={true} useChipsForPreview={true} 
                         showAlerts={false} dropzoneText={''} onDropRejected={props.onDropRejected} onChange={onChange} />
                     ) 
                 }

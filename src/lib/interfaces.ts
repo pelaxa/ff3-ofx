@@ -25,6 +25,7 @@ export interface OfxData {
     balanceDate?: Moment;
     startDate?: Moment;
     endDate?: Moment;
+    currency?: string;
     transactions?: (OfxParsedTransaction | null)[];
 }
 
@@ -67,6 +68,18 @@ export enum FF3AccountType {
     MORTGAGE = 'Mortgage'
 }
 
+export enum FF3ShortAccountType {
+    TYPE_ASSET = 'asset', 
+    TYPE_EXPENSE = 'expense', 
+    TYPE_IMPORT = 'import', 
+    TYPE_REVENUE = 'revenue', 
+    TYPE_CASH = 'cash',
+    TYPE_LIABILITY = 'liability',
+    TYPE_LIABILITIES = 'liabilities',
+    TYPE_INITIAL_BALANCE = 'initial-balance', 
+    TYPE_RECONCILIATION = 'reconciliation', 
+}
+
 export enum FF3AccountRole {
     DEFAULT_ASSET = 'defaultAsset', 
     SHARED_ASSET = 'sharedAsset', 
@@ -102,7 +115,7 @@ export interface FF3Error {
 
 export interface FF3Account {
     name: string;
-    type: FF3AccountType;
+    type: FF3ShortAccountType;
     iban?: string;
     bic?: string;
     account_number?: string;
@@ -218,4 +231,16 @@ export interface FF3AddTransactionWrapper<FF3TransactionSplit> {
     apply_rules: true;
     group_title: null;
     transactions: FF3TransactionSplit[];
+}
+
+export interface FF3NewAccount {
+    name: string;
+    number: string;
+    role?: FF3AccountRole,
+    institution?: string,
+    bank?: string,
+    currency?: string,
+    credit_card_type?: string,
+    monthly_payment_date?: string,
+    type?: string
 }

@@ -9,6 +9,7 @@ class Utils {
      * @param ofxDataIn The raw parsed OFX data
      * @returns 
      */
+    /* eslint-disable @typescript-eslint/no-explicit-any */
     static getOfxData(ofxDataIn: any) {
         const ofxData: OfxData = {
             accountNumber: undefined,
@@ -19,6 +20,7 @@ class Utils {
             balanceDate: undefined,
             startDate: undefined,
             endDate: undefined,
+            currency: undefined,
             transactions: [],
         };
         
@@ -41,6 +43,7 @@ class Utils {
             ofxData.endDate = Utils.ofxDateToFF3(
                 ofxDataIn.OFX.CREDITCARDMSGSRSV1.CCSTMTTRNRS.CCSTMTRS.BANKTRANLIST.DTEND,
             );
+            ofxData.currency = ofxDataIn.OFX.CREDITCARDMSGSRSV1.CCSTMTTRNRS.CCSTMTRS.CURDEF || 'EUR';
             ofxTransactions = ofxDataIn.OFX.CREDITCARDMSGSRSV1.CCSTMTTRNRS.CCSTMTRS.BANKTRANLIST.STMTTRN;
         } else if (ofxDataIn.OFX.BANKMSGSRSV1) {
             // If this is a checking or savings account
@@ -50,9 +53,10 @@ class Utils {
             ofxData.balanceDate = Utils.ofxDateToFF3(ofxDataIn.OFX.BANKMSGSRSV1.STMTTRNRS.STMTRS.LEDGERBAL?.DTASOF) || '?';
             ofxData.startDate = Utils.ofxDateToFF3(ofxDataIn.OFX.BANKMSGSRSV1.STMTTRNRS.STMTRS.BANKTRANLIST?.DTSTART) || '?';
             ofxData.endDate = Utils.ofxDateToFF3(ofxDataIn.OFX.BANKMSGSRSV1.STMTTRNRS.STMTRS.BANKTRANLIST?.DTEND) || '?';
+            ofxData.currency = ofxDataIn.OFX.BANKMSGSRSV1.STMTTRNRS.STMTRS.CURDEF || 'EUR';
             ofxTransactions = ofxDataIn.OFX.BANKMSGSRSV1.STMTTRNRS.STMTRS.BANKTRANLIST.STMTTRN;
         } else {
-            // eslint-disable-next-line no-throw-literal
+             
             throw 'OFX format not understood';
         }
 

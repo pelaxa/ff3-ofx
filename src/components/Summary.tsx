@@ -1,10 +1,10 @@
 import { Alert, Box, Card, CardContent, Fab, LinearProgress, Stack, Tooltip, Typography } from "@mui/material";
 import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
 import SavingsIcon from '@mui/icons-material/Savings';
-import React, { useEffect, useState } from "react";
-import { FF3Account, FF3Wrapper } from "lib/interfaces";
-import ApiService from "lib/apiService";
-import utils from "lib/utils";
+import { useEffect, useState } from "react";
+import { FF3Account, FF3Wrapper } from "@/lib/interfaces";
+import ApiService from "@/lib/apiService";
+import utils from "@/lib/utils";
 
 interface SummaryProps {
     bankBalance: number;

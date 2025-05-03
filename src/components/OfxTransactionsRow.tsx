@@ -1,11 +1,11 @@
-import React, { Fragment, useState } from "react";
+import { Fragment, useState } from "react";
 import { Button, Chip, TableCell, TableRow } from "@mui/material";
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 import AddIcon from '@mui/icons-material/Add';
-import { OfxParsedTransaction } from "lib/interfaces";
+import { OfxParsedTransaction } from "@/lib/interfaces";
 import OfxTransactionRow from "./OfxMatchingTransactionsTable";
-import utils from "lib/utils";
+import utils from "@/lib/utils";
 
 
 interface OfxTransactionsTableProps {
