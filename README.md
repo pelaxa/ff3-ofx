@@ -148,7 +148,7 @@ Note: These instructions are for a docker installation but should hopefully be c
     ...
     - ./ff3-ofx:/var/www/html/public/ofx
 ```
-3. Unzip the build zip in the same folder as your docker-compose file.  This will produce the ff3-ofx folder and put all the build files under it.
+3. Unpack the build tar in the same folder as your docker-compose file.  This will produce the ff3-ofx folder and put all the build files under it.
 4. Make sure file permissions are good.  `chmod 755` should be good enough to browse the folders and read the files.
 5. Restart your FF3 server: `docker compose down; docker compose up -d`\
    **Note:** Anytime you deploy a new version of ff3-ofx, you need to restart your FF3 instance to make sure it serves the new files
