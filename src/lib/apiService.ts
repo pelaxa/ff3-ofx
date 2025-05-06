@@ -45,6 +45,40 @@ const getHttp = (token?: string| null, url?: string | null) => {
     return myHttpClient;
 }
 
+async function* pageThroughResource(http, endpoint: string) {
+    async function* getResources(_http, _endpoint: string, currentPage: number = 1)
+    {
+        const config = {
+            params: {
+                page: currentPage
+            },
+            ...exceptionHandling
+        }
+        const response = await _http?.get(_endpoint, config);
+        if (response && response.status) {
+            if (response.status === 200 && response.data.data) {
+                for( const d of response.data.data) {
+                    yield d;
+                }
+
+                if(response.data.meta)
+                {
+                    const m = response.data.meta
+                    const totalPages = m.pagination.total_pages;
+                    const currentPage = m.pagination.current_page;
+                    if(currentPage < totalPages)
+                    {
+                        yield* getResources(_http, _endpoint, currentPage + 1);
+                    }
+                }
+
+              }
+        }
+    }
+
+    yield* getResources(http, endpoint)
+}
+
 const getLatestVersion = async(): Promise<string | null> => {
     const response = await axios.get('https://api.github.com/repos/pelaxa/ff3-ofx/tags',{
         headers: {
@@ -91,17 +125,13 @@ const getAccounts = async(currentToken?: string): Promise<FF3Wrapper<FF3Account>
     //   },
     // );
 
-    const response = await http?.get('/accounts', exceptionHandling);
-    if (response && response.status) {
-        if (response.status === 200 && response.data.data) {
-            return response.data.data;
-          } else if (response.status === 401) {
-            return null;
-          }
-    }
 
-    // Return an empty array otherwise
-    return [];
+    const accounts = await Array.fromAsync(pageThroughResource(http, '/accounts')).then((array) => {
+        console.log(array);
+        return array;
+    });
+    return accounts;
+
 };
 
 const getAccount = async(accountId: string): Promise<FF3Wrapper<FF3Account> | null> => {
@@ -152,7 +182,8 @@ const getAccountTransactions = async (accountId: string, startDate?: Moment, end
     if (response && response.status === 200 && response.data.data) {
       return response.data.data;
     }
-    return [];
+    const transactions = await Array.fromAsync(pageThroughResource(http, `/accounts/${accountId}/transactions${queryString}`));
+    return transactions;
 
 };
 
@@ -167,11 +198,8 @@ const getTransactions = async (startDate?: Moment, endDate?: Moment): Promise<FF
             queryString += `${queryString.length > 0 ? '&' : '?'}end=${endDate.format(DATE_FORMAT)}`;
         }
     }
-    const response = await http?.get(`/transactions${queryString}`, exceptionHandling);
-    if (response && response.status === 200 && response.data.data) {
-      return response.data.data;
-    }
-    return [];
+    const transactions = await Array.fromAsync(pageThroughResource(http, `transactions${queryString}`));
+    return transactions;
 };
 
 const addTransaction = async (txn: FF3AddTransactionWrapper<FF3TransactionSplit>): Promise<FF3Wrapper<FF3Transaction> | FF3Error | null> => {
