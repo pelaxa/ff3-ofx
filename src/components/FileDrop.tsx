@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 
 
 interface FileDropProps {
-    text: string;
+    text?: string;
     errorMessage: string;
     fileLimit: number;
     onChange: (files: File[]) => void;
@@ -40,8 +40,8 @@ const FileDrop = (props: FileDropProps) => {
             <Collapse in={showError}>
                 <Alert severity="error" action={<IconButton size="small" onClick={() => { setShowError(false); }}><CloseIcon /></IconButton>}>{errorMessage}</Alert>
             </Collapse>
-            <p>{props.text}</p>
-            <Box component="section" minWidth={400} height={130}>
+            {props.text && (<p>{props.text}</p>)}
+            <Box component="section" maxWidth={400}>
                 {!showError && (
                     <DropzoneArea dropzoneClass="drop_zone" filesLimit={props.fileLimit} showPreviews={false} showPreviewsInDropzone={true} useChipsForPreview={true} 
                         showAlerts={false} dropzoneText={''} onDropRejected={props.onDropRejected} onChange={onChange} />

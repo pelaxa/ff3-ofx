@@ -45,6 +45,51 @@ const getHttp = (token?: string| null, url?: string | null) => {
     return myHttpClient;
 }
 
+
+/**
+ * Contributed by https://github.com/programmeroftheeve
+ * A way to allow paging through accounts and transactions.
+ * 
+ * @param http 
+ * @param endpoint 
+ */
+async function* pageThroughResource(http: AxiosInstance | undefined, endpoint: string) {
+    async function* getResources(_http: AxiosInstance | undefined, _endpoint: string, currentPage: number = 1): AsyncGenerator<unknown,void, unknown>
+    {
+        const config = {
+            params: {
+                limit: 75,  // Fetch a max of 75 records by default.
+                page: currentPage
+            },
+            ...exceptionHandling
+        }
+        const response = await _http?.get(_endpoint, config);
+        if (response && response.status) {
+            if (response.status === 200 && response.data.data) {
+                for( const d of response.data.data) {
+                    yield d;
+                }
+
+                if(response.data.meta)
+                {
+                    const m = response.data.meta
+                    const totalPages = m.pagination.total_pages;
+                    const currentPage = m.pagination.current_page;
+                    if(currentPage < totalPages)
+                    {
+                        yield* getResources(_http, _endpoint, currentPage + 1);
+                    }
+                }
+
+            } else if (response.status === 401) {
+                yield null;
+            }
+        }
+    }
+
+    yield* getResources(http, endpoint)
+}
+
 const getLatestVersion = async(): Promise<string | null> => {
     const response = await axios.get('https://api.github.com/repos/pelaxa/ff3-ofx/tags',{
         headers: {
@@ -91,17 +136,13 @@ const getAccounts = async(currentToken?: string): Promise<FF3Wrapper<FF3Account>
     //   },
     // );
 
-    const response = await http?.get('/accounts', exceptionHandling);
-    if (response && response.status) {
-        if (response.status === 200 && response.data.data) {
-            return response.data.data;
-          } else if (response.status === 401) {
-            return null;
-          }
-    }
+    // Only return asset accounts
+    const accounts = await Array.fromAsync(pageThroughResource(http, '/accounts?type=asset')).then((array) => {
+        console.log(array);
+        return array as FF3Wrapper<FF3Account>[];
+    });
+    return accounts;
 
-    // Return an empty array otherwise
-    return [];
 };
 
 const getAccount = async(accountId: string): Promise<FF3Wrapper<FF3Account> | null> => {
@@ -116,7 +157,7 @@ const getAccount = async(accountId: string): Promise<FF3Wrapper<FF3Account> | nu
 
 const createAccount = async(accountData: FF3NewAccount): Promise<FF3Wrapper<FF3Account> | null> => {
     const http = getHttp();
-    let newAccountData: FF3Account = {
+    const newAccountData: FF3Account = {
         name: accountData.name,
         type: FF3ShortAccountType.TYPE_ASSET, // Seems like there is AccountTypeProperty and ShortAccountTypeProperty, and the latter is used here: https://api-docs.firefly-iii.org/firefly-iii-2.0.10-v2.yaml
         account_number: accountData.number,
@@ -148,11 +189,8 @@ const getAccountTransactions = async (accountId: string, startDate?: Moment, end
         }
     }
     console.log('queryString', queryString);
-    const response = await http?.get(`/accounts/${accountId}/transactions${queryString}`, exceptionHandling);
-    if (response && response.status === 200 && response.data.data) {
-      return response.data.data;
-    }
-    return [];
+    const transactions = await Array.fromAsync(pageThroughResource(http, `/accounts/${accountId}/transactions${queryString}`));
+    return transactions as FF3Wrapper<FF3Transaction>[];
 
 };
 
@@ -167,11 +205,8 @@ const getTransactions = async (startDate?: Moment, endDate?: Moment): Promise<FF
             queryString += `${queryString.length > 0 ? '&' : '?'}end=${endDate.format(DATE_FORMAT)}`;
         }
     }
-    const response = await http?.get(`/transactions${queryString}`, exceptionHandling);
-    if (response && response.status === 200 && response.data.data) {
-      return response.data.data;
-    }
-    return [];
+    const transactions = await Array.fromAsync(pageThroughResource(http, `transactions${queryString}`));
+    return transactions as FF3Wrapper<FF3Transaction>[];
 };
 
 const addTransaction = async (txn: FF3AddTransactionWrapper<FF3TransactionSplit>): Promise<FF3Wrapper<FF3Transaction> | FF3Error | null> => {

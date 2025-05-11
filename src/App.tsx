@@ -7,7 +7,7 @@ import { FF3Account, FF3AccountRole, FF3AddTransactionWrapper, FF3Error, FF3NewA
 import Button from '@mui/material/Button';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import CheckIcon from '@mui/icons-material/Check';
-import { Alert, Box, Checkbox, Collapse, FormControlLabel, MenuItem, Paper, Select, SelectChangeEvent, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography } from '@mui/material';
+import { Alert, Box, Checkbox, Collapse, FormControlLabel, Grid, MenuItem, Paper, Select, SelectChangeEvent, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography } from '@mui/material';
 import * as OFXParser from 'node-ofx-parser';
 import Summary from './components/Summary';
 import OfxTransactionsRow from '@/components/OfxTransactionsRow';
@@ -429,11 +429,12 @@ function App() {
                 }
 
                 console.log('Processed Txn! Progress: ', progress, transactions);
-                setProgress((transactions.length / ofxData.transactions.length) * 100);
+                setProgress(((transactions.length+1) / ofxData.transactions.length) * 100);
             }
         } else {
             console.log('Done processing! Updating final account balance...');
             setProcessed(true);
+            setShowFileDrop(true);
             console.log('Processed Transactions', progress, transactions);
         }
     }, [addTransaction, ofxData, progress, selectedAccount, transactions]);
@@ -473,7 +474,7 @@ function App() {
 
     const bankBalance: number = ofxData ? parseFloat(parseFloat('' + ofxData.balance).toFixed(2)) : 0;
 
-    console.warn('Account role:', newAccountData?.role);
+    console.debug('Account role:', newAccountData?.role);
 
     return (
         <div className="App">
@@ -520,12 +521,17 @@ function App() {
                     </Box>
                 </Collapse>
                 <Collapse in={!!token && showFileDrop}>
-                    <FileDrop text={'Drop an OFX file or click below to start the import'} errorMessage={errorMessage} fileLimit={1} onChange={showFile} />
-                    <Button variant="contained" color="secondary" onClick={() => { localStorage.removeItem('token'); window.location.reload(); }}><RefreshIcon /> &nbsp;Reset Token!</Button>
-                </Collapse>
-                <Collapse in={!!token && !showFileDrop && processed}>
-                    <Button variant="contained" onClick={() => { window.location.reload(); }}><RefreshIcon /> &nbsp;New Import!</Button>
-                    <br /><br />
+                    <Grid container spacing={0} pb={5} sx={{justifyContent: "center", alignItems: "center"}}>
+                        <Grid size={12}>
+                            <Typography variant='h5' sx={{ m: 1 }}>Drop an OFX file or click below to start the import</Typography>
+                        </Grid>
+                        <Grid size={5}>
+                            <FileDrop errorMessage={errorMessage} fileLimit={1} onChange={showFile} />
+                        </Grid>
+                        <Grid size={3}>
+                            <Button variant="contained" color="secondary" onClick={() => { localStorage.removeItem('token'); window.location.reload(); }}><RefreshIcon /> &nbsp;Reset Token!</Button>
+                        </Grid>
+                    </Grid>
                 </Collapse>
                 <Collapse in={!!token && !showFileDrop && !!matchingAccounts && matchingAccounts.length > 1}>
                     <Typography variant='h5' sx={{ m: 5 }}>Multiple accounts matches found!  Please select one of the accounts below to import the transactions</Typography>
@@ -578,7 +584,7 @@ function App() {
                                             </Typography>
                                         </TableCell>
                                         <TableCell>
-                                            <TextField id="outlined-basic" fullWidth variant="outlined" defaultValue={newAccountData?.name} onBlur={(event: React.FocusEvent<HTMLInputElement>) => setNewAccountData({number: '', ...newAccountData, name: (event.target.value || '') } ) }/>
+                                            <TextField id="newAccountName" fullWidth variant="outlined" defaultValue={newAccountData?.name} onBlur={(event: React.FocusEvent<HTMLInputElement>) => setNewAccountData({number: '', ...newAccountData, name: (event.target.value || '') } ) }/>
                                         </TableCell>
                                     </TableRow>
                                     <TableRow>
@@ -588,9 +594,7 @@ function App() {
                                             </Typography>
                                         </TableCell>
                                         <TableCell>
-                                            <Typography sx={{ m: 1 }}>
-                                                <TextField id="outlined-basic" fullWidth variant="outlined" defaultValue={newAccountData?.number} onBlur={(event: React.FocusEvent<HTMLInputElement>) => setNewAccountData({name: '', ...newAccountData, number: (event.target.value || '???') } ) }/>
-                                            </Typography>
+                                                <TextField id="newAccountNumber" fullWidth variant="outlined" defaultValue={newAccountData?.number} onBlur={(event: React.FocusEvent<HTMLInputElement>) => setNewAccountData({name: '', ...newAccountData, number: (event.target.value || '???') } ) }/>
                                         </TableCell>
                                     </TableRow>
                                     <TableRow>
