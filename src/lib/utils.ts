@@ -26,8 +26,12 @@ class Utils {
         
         let ofxTransactions: OfxTransaction[]|null = null;
         // Set common settings here
-        ofxData.org = ofxDataIn.OFX.SIGNONMSGSRSV1.SONRS.FI?.ORG;
-        ofxData.intuitId = ofxDataIn.OFX.SIGNONMSGSRSV1.SONRS.INTUBID;
+        try {
+            ofxData.org = ofxDataIn.OFX.SIGNONMSGSRSV1.SONRS.FI?.ORG;
+            ofxData.intuitId = ofxDataIn.OFX.SIGNONMSGSRSV1.SONRS.INTUBID;
+        } catch (e) {
+            console.warn('OFX.SIGNONMSGSRSV1.SONRS.FI.ORG missing from OFX file', e);
+        }
             
         if (ofxDataIn.OFX.CREDITCARDMSGSRSV1) {
             // If this is a credit card account
@@ -61,7 +65,8 @@ class Utils {
         }
 
         // If there is only one transaction, it may not come back as an array, so make sure we have an array back
-        if (ofxTransactions !== null && !Array.isArray(ofxTransactions)) {
+        // If there are no transactions, we get an array of 1 transaction that is null.
+        if (ofxTransactions && !Array.isArray(ofxTransactions)) {
             ofxTransactions = [ofxTransactions];
         } else if (ofxTransactions == null) {
             ofxTransactions = [];
