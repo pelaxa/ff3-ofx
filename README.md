@@ -127,8 +127,6 @@ See the section about [deployment](https://facebook.github.io/create-react-app/d
 
 Creates a new tar file with the artifacts in the `dist` folder.  It must be run after `yarn compile`.
 
-Note that the tar command is MacOS specific and may not work on other Linux platforms.
-
 Unpacking the tar file will create a ff3-ofx folder containing the application.
 
 ### `yarn package`
