@@ -135,9 +135,9 @@ Unpacking the tar file will create a ff3-ofx folder containing the application.
 
 executes `yarn compile` and then `yarn dist`.
 
-## Deployment
+## Deployment / Installation
 
-Once the application has been built, it produces a tar file that can be uploaded to your FF3 server.  This app currently only works if it is served from the same domain as your FF3 server, so the steps below help you get it installed in a subdirectory so that it can be easily accessed.
+Once the application has been built (or you can download the pre-compiled tar.gz file for any release), it produces a tar file that can be uploaded to your FF3 server.  This app currently only works if it is served from the same domain as your FF3 server, so the steps below help you get it installed in a subdirectory so that it can be easily accessed.
 
 Note: These instructions are for a docker installation but should hopefully be clear enough for other installation types to figure out what is needed.
 
@@ -148,7 +148,7 @@ Note: These instructions are for a docker installation but should hopefully be c
     ...
     - ./ff3-ofx:/var/www/html/public/ofx
 ```
-3. Unpack the build tar in the same folder as your docker-compose file.  This will produce the ff3-ofx folder and put all the build files under it.
+3. Unpack the tar in the same folder as your docker-compose file.  This will produce the ff3-ofx folder and put all the build files under it.
 4. Make sure file permissions are good.  `chmod 755` should be good enough to browse the folders and read the files.
 5. Restart your FF3 server: `docker compose down; docker compose up -d`\
    **Note:** Anytime you deploy a new version of ff3-ofx, you need to restart your FF3 instance to make sure it serves the new files

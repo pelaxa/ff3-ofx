@@ -76,7 +76,9 @@ function App() {
      */
     const init = useCallback(async (currentToken?: Token) => {
         ApiService.getAccounts(currentToken?.value).then(accntResponse => {
-            if (accntResponse && accntResponse.length > 0) {
+            // TODO: Fix response when token has expired.
+            console.log('accntResponse', accntResponse);
+            if (accntResponse && accntResponse.length >= 0) {
                 setAccounts(accntResponse);
                 // If we got accounts back, then store the token
                 if (currentToken && currentToken.value) {
@@ -107,12 +109,12 @@ function App() {
         } else if (!accountOfxData) {
             accountOfxData = ofxData;
         }
-        if (accounts && accounts?.length > 0) {
+        if (accounts && accounts?.length >= 0) {
             // Make sure we do not have an error
             setErrorMessage('');
             // Find the account
             const theAccount = accounts.find(account => {
-                return account.attributes.account_number === accountOfxData?.accounts[ofxAccountIndex].accountNumber;
+                return account && account.attributes?.account_number === accountOfxData?.accounts[ofxAccountIndex].accountNumber;
             });
             if (theAccount) {
                 setProcessed(false);

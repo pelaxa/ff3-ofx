@@ -1,6 +1,6 @@
 {
   "name": "ff3-ofx",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "homepage": "./",
   "private": true,
   "type": "module",
@@ -14,34 +14,33 @@
   "dependencies": {
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",
-    "@fontsource/roboto": "^5.2.8",
-    "@mui/icons-material": "^7.3.4",
-    "@mui/material": "^7.3.4",
-    "axios": "^1.12.2",
+    "@fontsource/roboto": "^5.2.10",
+    "@mui/icons-material": "^7.3.9",
+    "@mui/material": "^7.3.9",
+    "axios": "^1.14.0",
     "moment": "^2.30.1",
     "mui-file-dropzone": "^4.0.2",
     "node-ofx-parser": "^0.5.1",
-    "react": "^19.2.0",
-    "react-dom": "^19.2.0",
-    "web-vitals": "^5.1.0"
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "web-vitals": "^5.2.0"
   },
   "scripts": {
     "dev": "vite",
     "start": "vite preview",
     "compile": "tsc -b && vite build",
-    "dist": "rm -f ./dist/*.gz ; tar -cvzf dist/ff3-ofx-${npm_package_version}.tar.gz dist/*",
-    "dist:mac": {
-      "os": "darwin",
-      "command": "rm -f ./dist/*.gz ; tar -s \"/^dist/ff3-ofx/\" -cvzf dist/ff3-ofx-${npm_package_version}.tar.gz dist/*"
-    },
-    "dist:linux": {
-      "os": "linux",
-      "command": "rm -f ./dist/*.gz ; tar -cvzf dist/ff3-ofx-${npm_package_version}.tar.gz dist/*"
-    },
+    "dist": "cross-os dist",
     "package": "rm -rf ./dist/* ; yarn compile && yarn dist",
     "test": "vitest",
     "lint": "eslint src --ext js,jsx --report-unused-disable-directives --max-warnings 0",
     "clean": "rm -rf ./node_modules"
+  },
+  "cross-os": {
+    "dist": {
+      "darwin": "rm -f ./dist/*.gz ; tar -s \"/^dist/ff3-ofx/\" -cvzf dist/ff3-ofx-${npm_package_version}.tar.gz dist/*",
+      "win32": "echo Windows is not currently supported!",
+      "linux": "rm -f ./dist/*.gz ; tar --transform 's|^dist|ff3-ofx|' -cvzf dist/ff3-ofx-${npm_package_version}.tar.gz dist/*"
+    }
   },
   "browserslist": {
     "production": [
@@ -66,6 +65,7 @@
     "@types/react": "^19.0.10",
     "@types/react-dom": "^19.0.4",
     "@vitejs/plugin-react-swc": "^3.8.0",
+    "cross-os": "^1.5.0",
     "eslint": "^9.22.0",
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.4.19",
@@ -76,5 +76,5 @@
     "vite": "^6.3.1",
     "vite-plugin-compression": "^0.5.1"
   },
-  "packageManager": "yarn@4.9.1"
+  "packageManager": "yarn@4.13.0"
 }
