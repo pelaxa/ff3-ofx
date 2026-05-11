@@ -1,10 +1,11 @@
-import { Alert, Box, Card, CardContent, Fab, LinearProgress, Stack, Tooltip, Typography } from "@mui/material";
+import { Alert, Box, Card, CardContent, LinearProgress, Stack, Typography } from "@mui/material";
 import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
 import SavingsIcon from '@mui/icons-material/Savings';
 import { useEffect, useState } from "react";
 import { FF3Account, FF3AccountRole, FF3Wrapper } from "@/lib/interfaces";
 import ApiService from "@/lib/apiService";
 import utils from "@/lib/utils";
+import { tokens } from '@/theme';
 
 interface SummaryProps {
     bankBalance: number;
@@ -14,13 +15,23 @@ interface SummaryProps {
 
 }
 
+const balanceCardSx = {
+    flex: 1,
+    textAlign: 'center',
+    backgroundColor: tokens.bgSunken,
+    border: '1px solid',
+    borderColor: 'divider',
+    borderRadius: 2,
+    p: 2,
+};
+
 const Summary = (props: SummaryProps) => {
 
     const [account, setAccount] = useState<FF3Wrapper<FF3Account> | null>(null);
     const [accountBalance, setAccountBalance] = useState(0);
     const [bankBalance, setBankBalance] = useState(0);
     const [diff, setDiff] = useState<number>(props.bankBalance);
-    
+
     useEffect(() => {
         async function getAccount() {
             const theAccount = await ApiService.getAccount(props.accountId || '0');
@@ -55,60 +66,69 @@ const Summary = (props: SummaryProps) => {
         }
 
         getAccount();
-        
+
     },[account, bankBalance, props.accountId, props.bankBalance, props.progress]);
-    
+
 
     return (
         <Box sx={{ width: 960 }} pb={2}>
             {props.bankBalance !== accountBalance && (
-                <Alert severity="warning">
+                <Alert severity="warning" sx={{ mb: 1 }}>
                     The bank balance does not match your account balance. Look for transactions that may
                     have been matched but need to be added anyways.
                 </Alert>
             )}
             <Card variant="outlined">
                 <CardContent>
-                    <Typography variant="h3" gutterBottom component="div">
-                        {(account as unknown as FF3Wrapper<FF3Account>)?.attributes.name} ({(account as unknown as FF3Wrapper<FF3Account>)?.attributes.account_number})
+                    <Typography sx={{ fontSize: '13px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.8px', color: 'primary.light', mb: 2, textAlign: 'center' }}>
+                        {(account as unknown as FF3Wrapper<FF3Account>)?.attributes.name}
+                        {' — '}
+                        {(account as unknown as FF3Wrapper<FF3Account>)?.attributes.account_number}
                     </Typography>
-                    <Stack direction="row" justifyContent="space-between">
-                        <Tooltip title="Bank Balance">
-                            <Fab variant="extended">
-                                <Stack direction={"row"}>
-                                    <AccountBalanceIcon />
-                                    <Typography variant="overline">Bank</Typography>
-                                </Stack>
-                                <Typography variant="h5" pl={2} component="div"> {utils.getLocaleCurrency(bankBalance)}</Typography>
-                            </Fab>
-                        </Tooltip>
+
+                    <Stack direction="row" alignItems="center" spacing={2}>
+                        {/* Bank balance */}
+                        <Box sx={balanceCardSx}>
+                            <Stack direction="row" alignItems="center" justifyContent="center" spacing={0.5} mb={0.5}>
+                                <AccountBalanceIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+                                <Typography variant="overline" sx={{ color: 'text.secondary', lineHeight: 1 }}>Bank Balance</Typography>
+                            </Stack>
+                            <Typography variant="h5">{utils.getLocaleCurrency(bankBalance)}</Typography>
+                            <Typography variant="caption" sx={{ color: tokens.textMuted, display: 'block', mt: '4px' }}>as of OFX file</Typography>
+                        </Box>
+
+                        {/* Center: progress or diff */}
                         {!props.processed && (
-                            <Box sx={{ minWidth: 150, mr: 1, alignSelf: 'center' }}>
+                            <Box sx={{ flex: 1, textAlign: 'center' }}>
+                                <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 1, textTransform: 'uppercase', letterSpacing: '0.6px' }}>
+                                    Importing…
+                                </Typography>
                                 <LinearProgress variant="determinate" value={props.progress} />
+                                <Typography variant="caption" sx={{ color: 'text.secondary', mt: 0.5, display: 'block', textAlign: 'right' }}>
+                                    {Math.round(props.progress)}%
+                                </Typography>
                             </Box>
                         )}
                         {props.processed && (
-                            <Stack direction={"column"}>
-                                <Typography
-                                    variant="h4"
-                                    sx={{ color: `${diff != 0 ? '#f00' : '#090'}` }}
-                                    gutterBottom
-                                    component="div">
+                            <Box sx={{ flex: 1, textAlign: 'center' }}>
+                                <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: '4px', textTransform: 'uppercase', letterSpacing: '0.6px' }}>
+                                    Difference
+                                </Typography>
+                                <Typography variant="h4" sx={{ color: diff !== 0 ? 'error.main' : 'success.main' }}>
                                     {utils.getLocaleCurrency(diff)}
                                 </Typography>
-                                <Typography
-                                variant="caption" component="div">Difference</Typography>
-                            </Stack>
+                            </Box>
                         )}
-                        <Tooltip title="Account Balance">
-                            <Fab variant="extended">
-                                <Stack direction={"row"}>
-                                    <SavingsIcon />
-                                    <Typography variant="overline">Firefly</Typography>
-                                </Stack>
-                                <Typography variant="h5" pl={2} component="div"> {utils.getLocaleCurrency(accountBalance)}</Typography>
-                            </Fab>
-                        </Tooltip>
+
+                        {/* Firefly balance */}
+                        <Box sx={balanceCardSx}>
+                            <Stack direction="row" alignItems="center" justifyContent="center" spacing={0.5} mb={0.5}>
+                                <SavingsIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+                                <Typography variant="overline" sx={{ color: 'text.secondary', lineHeight: 1 }}>Firefly Balance</Typography>
+                            </Stack>
+                            <Typography variant="h5">{utils.getLocaleCurrency(accountBalance)}</Typography>
+                            <Typography variant="caption" sx={{ color: tokens.textMuted, display: 'block', mt: '4px' }}>current account balance</Typography>
+                        </Box>
                     </Stack>
                 </CardContent>
             </Card>

@@ -1,4 +1,5 @@
 import { defineConfig, loadEnv, ConfigEnv } from 'vite';
+/// <reference types="vitest" />
 import react from '@vitejs/plugin-react-swc';
 import viteCompression from 'vite-plugin-compression';
 // import httpProxy from 'http-proxy';
@@ -35,6 +36,11 @@ export default defineConfig(({command, mode} : ConfigEnv) => {
       alias: {
         '@': '/src'
       },
+    },
+    test: {
+      globals: true,
+      environment: 'jsdom',
+      setupFiles: ['./src/setupTests.js'],
     },
     // https://dev.to/manojspace/migrating-from-create-react-app-to-vite-a-step-by-step-guide-2cab
     server: {

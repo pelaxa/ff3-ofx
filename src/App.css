@@ -1,7 +1,3 @@
-.App {
-  text-align: center;
-}
-
 .App-logo {
   height: 40vmin;
   pointer-events: none;
@@ -13,27 +9,18 @@
   }
 }
 
-h6 {
-  text-transform: uppercase;
-  font-size: 1rem !important;
-}
-
-.MuiTypography-h3 {
-  font-size: 23px !important;
-}
 
 .App-header {
-  background-color: #282c34;
-  min-height: 100vh;
+  min-height: calc(100vh - 64px);
   display: flex;
   flex-direction: column;
   flex: 1;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   font-size: calc(8px + 1vmin);
-  font-family:'Lucida Sans', 'Lucida Sans Regular', 'Lucida Grande', 'Lucida Sans Unicode', Geneva, Verdana, sans-serif;
   color: white;
-  padding: auto 20px;
+  padding: 40px 24px;
+  gap: 24px;
 }
 
 .MuiTableHead-root .MuiTableCell-root {
@@ -45,10 +32,7 @@ h6 {
 }
 
 .scrollview {
-  max-height: 80vh;
-  margin: 0 auto;
-  width: 100%;
-  min-width: 900px;
+  width: 960px;
 }
 
 .matching-txns th,

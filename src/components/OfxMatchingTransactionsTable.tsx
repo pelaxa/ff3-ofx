@@ -19,11 +19,7 @@ const OfxMatchingTransactionsTable = (props: OfxTransactionRowProps) => {
                 <Collapse in={props.open} timeout="auto" unmountOnExit>
                     <Box
                         sx={{
-                            p: 2,
-                            backgroundColor: 'rgb(156, 39, 176)',
-                            borderRadius: 5,
-                            marginBottom: 5,
-                            marginTop: 2
+                            p: 2
                         }}>
                         <Table
                             sx={{ width: '100%', alignSelf: 'flex-end' }}

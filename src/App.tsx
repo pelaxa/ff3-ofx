@@ -7,7 +7,7 @@ import { FF3Account, FF3AccountRole, FF3AddTransactionWrapper, FF3Error, FF3NewA
 import Button from '@mui/material/Button';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import CheckIcon from '@mui/icons-material/Check';
-import { Alert, Box, Checkbox, Collapse, FormControlLabel, Grid, MenuItem, Paper, Select, SelectChangeEvent, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography } from '@mui/material';
+import { Alert, AppBar, Box, Card, CardContent, Checkbox, Chip, Collapse, FormControlLabel, MenuItem, Paper, Select, SelectChangeEvent, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Toolbar, Typography } from '@mui/material';
 import * as OFXParser from 'node-ofx-parser';
 import Summary from './components/Summary';
 import OfxTransactionsRow from '@/components/OfxTransactionsRow';
@@ -61,6 +61,8 @@ function App() {
     const [newAccountData, setNewAccountData] = useState<FF3NewAccount | undefined>();
     // Disable the login button on startup
     const [loginDisabled, setLoginDisabled] = useState(true);
+    // Tracks the token field value so the login button can read it without querySelector
+    const [tokenInput, setTokenInput] = useState('');
 
     const checkForUpdates = useCallback(async () => {
         const myVersion = `${__APP_VERSION__}`;
@@ -185,6 +187,18 @@ function App() {
             setErrorMessage(ERROR_NO_ACCOUNT);
         }
     },[accounts, ofxAccountIndex, ofxData]);
+
+    const handleImportAnother = useCallback(() => {
+        if (matchingAccounts) setMatchingAccounts(undefined);
+        if (selectedAccount) setSelectedAccount(undefined);
+        if (transactions && transactions.length > 0) setTransactions([]);
+        if (progress !== 0) setProgress(0);
+        setOfxData(undefined);
+        setProcessed(false);
+        setShowFileDrop(true);
+        setErrorMessage('');
+        setNewAccountData(undefined);
+    }, [matchingAccounts, progress, selectedAccount, transactions]);
 
     const resetState = useCallback(() => {
         if (matchingAccounts) setMatchingAccounts(undefined);
@@ -488,7 +502,6 @@ function App() {
                 }
             }
             setProcessed(true);
-            setShowFileDrop(true);
             console.log('Processed Transactions', progress, transactions);
         }
     }, [ofxData, transactions, ofxAccountIndex, selectedAccount, progress, addTransaction, resetState]);
@@ -548,71 +561,100 @@ function App() {
 
     // console.debug('Account role:', newAccountData?.role);
 
+    const activeStep = !token ? 0
+        : (showFileDrop && !processed && transactions.length === 0) ? 1
+        : !processed ? 2
+        : 3;
+
     return (
         <div className="App">
+            <AppBar position="sticky">
+                <Toolbar>
+                    <Typography variant="h6" sx={{ flex: 1, fontWeight: 700 }}>
+                        ff3<Box component="span" sx={{ color: 'primary.light' }}>-ofx</Box>
+                    </Typography>
+                    <Box component="span" sx={{ mr: 2, px: 1, py: '2px', background: 'rgba(255,255,255,.1)', borderRadius: '10px', fontSize: '11px', color: 'primary.light', fontWeight: 500 }}>
+                        v{__APP_VERSION__}
+                    </Box>
+                    {token && (
+                        <Button
+                            color="inherit"
+                            size="small"
+                            startIcon={<RefreshIcon />}
+                            onClick={() => { localStorage.removeItem('token'); window.location.reload(); }}
+                        >
+                            Reset Token
+                        </Button>
+                    )}
+                </Toolbar>
+            </AppBar>
             {updateAvailable && (
-                <Alert variant="filled" severity="info">
+                <Alert variant="outlined" severity="info">
                     You are currently running <b>{__APP_NAME__}</b> version <b>{__APP_VERSION__}</b>.  There is a new version available <a href="https://github.com/pelaxa/ff3-ofx/releases/latest" target="_new">here</a>.
                 </Alert>
             )}
             <div className="App-header">
+                <Box sx={{ display: 'flex', backgroundColor: 'background.paper', border: '1px solid', borderColor: 'divider', borderRadius: '6px', p: '4px', width: 700 }}>
+                    {(['Login', 'Import', 'Processing', 'Done'] as const).map((label, idx) => (
+                        <Box key={label} sx={{
+                            flex: 1, py: '8px', textAlign: 'center', borderRadius: '4px',
+                            fontSize: '12px', fontWeight: 500, userSelect: 'none',
+                            color: activeStep === idx ? '#fff' : 'text.secondary',
+                            backgroundColor: activeStep === idx ? 'primary.main' : 'transparent',
+                            transition: 'all .15s',
+                        }}>
+                            {idx + 1} · {label}
+                        </Box>
+                    ))}
+                </Box>
                 <Collapse in={!token}>
-                    <Box sx={{ width: '50%', margin: '0 auto' }}>
-                        <Typography variant='h5' sx={{ m: 5 }}>Provide your FireFlyIII token below and click login.  
-                            Do not forget to check the store box if you would like to store the key for next time.</Typography>
-                        <TextField
-                            required
-                            focused
-                            color="primary"
-                            variant="filled"
-                            id="outlined-password-input"
-                            label="FF3 Token"
-                            sx={{ width: '70ch' }}
-                            type="password"
-                            autoComplete="current-password"
-                            onChange={(event: React.ChangeEvent<HTMLInputElement>) => {
-                                if (event.target.value.trim().length > 0) {
-                                    setLoginDisabled(false);
-                                } else {
-                                    setLoginDisabled(true);
-                                }
-                            }}
-                            slotProps={{
-                                input: {
-                                    endAdornment: (
-                                        <Button variant="contained" disabled={loginDisabled} onClick={ () =>
-                                            init({ "value": `${(document.getElementById('outlined-password-input') as HTMLInputElement)?.value.trim()}` })
-                                        }>Login</Button>
-                                    ),
-                                },
-                              }}
-                            
-                        />
-                        <br />
-                        <FormControlLabel control={<Checkbox id={'chkStoreToken'} />} label="Store Token for next time" />
-                    </Box>
+                    <Card sx={{ width: 500 }}>
+                        <CardContent sx={{ p: 3 }}>
+                            <Typography variant='subtitle1' sx={{ mb: 1 }}>Connect to FireFly III</Typography>
+                            <Typography variant='body2' sx={{ mb: 3, color: 'text.secondary' }}>
+                                Enter your personal access token to get started. You can find or create one in
+                                FireFly III under <em>Profile → OAuth → Personal Access Tokens</em>.
+                            </Typography>
+                            <TextField
+                                required
+                                focused
+                                fullWidth
+                                color="primary"
+                                variant="filled"
+                                id="outlined-password-input"
+                                label="Personal Access Token"
+                                type="password"
+                                autoComplete="current-password"
+                                value={tokenInput}
+                                onChange={(event: React.ChangeEvent<HTMLInputElement>) => {
+                                    setTokenInput(event.target.value);
+                                    if (event.target.value.trim().length > 0) {
+                                        setLoginDisabled(false);
+                                    } else {
+                                        setLoginDisabled(true);
+                                    }
+                                }}
+                            />
+                            <FormControlLabel
+                                sx={{ mt: 1, mb: 2, display: 'block' }}
+                                control={<Checkbox id={'chkStoreToken'} />}
+                                label="Remember token for next time"
+                            />
+                            <Button fullWidth variant="contained" disabled={loginDisabled} onClick={() => init({ value: tokenInput.trim() })}>
+                                Login
+                            </Button>
+                        </CardContent>
+                    </Card>
                 </Collapse>
                 <Collapse in={!!token && showFileDrop}>
-                    <Grid container spacing={0} pb={5} sx={{justifyContent: "center", alignItems: "center"}}>
-                        <Grid size={12}>
-                            <Typography variant='h5' sx={{ m: 1 }}>Drop an OFX file or click below to start the import</Typography>
-                        </Grid>
-                        {errorMessage && (
-                             <Grid size={12}>
-                                <FileDrop errorMessage={errorMessage} fileLimit={1} onChange={showFile} />
-                            </Grid>
-                        )}
-                         {!errorMessage && (
-                            <>
-                            <Grid size={5}>
-                                <FileDrop errorMessage={errorMessage} fileLimit={1} onChange={showFile} />
-                            </Grid>
-                            <Grid size={3}>
-                                <Button variant="contained" color="secondary" onClick={() => { localStorage.removeItem('token'); window.location.reload(); }}><RefreshIcon /> &nbsp;Reset Token!</Button>
-                            </Grid>
-                            </>
-                         )}
-                    </Grid>
+                    <Card sx={{ width: 560 }}>
+                        <CardContent sx={{ p: 3 }}>
+                            <Typography variant='subtitle2' sx={{ mb: 2, textTransform: 'uppercase', letterSpacing: '0.8px', color: 'primary.light' }}>
+                                Import OFX / QFX File
+                            </Typography>
+                            <FileDrop errorMessage={errorMessage} fileLimit={1} onChange={showFile} />
+                        </CardContent>
+                    </Card>
                 </Collapse>
                 <Collapse in={ofxData && ofxData?.accounts.length > 1}>
                     <OfxSummary accounts={ofxData?.accounts || []} clickHandler={handleNextAccount} selectionAllowed={processed}/>
@@ -753,8 +795,27 @@ function App() {
                 {transactions && transactions.length > 0 && (
                     <>
                         <Summary bankBalance={bankBalance} accountId={selectedAccount?.id} processed={processed} progress={progress} />
+                        {processed && (
+                            <Box sx={{
+                                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                width: 960, mb: 1, p: '20px 24px',
+                                backgroundColor: 'background.default',
+                                border: '1px solid',
+                                borderColor: 'divider',
+                                borderRadius: 2,
+                                gap: 2,
+                            }}>
+                                <Box>
+                                    <Typography variant="subtitle2">Import another file?</Typography>
+                                    <Typography variant="body2" sx={{ color: 'text.secondary', mt: '4px' }}>Drop a new OFX or QFX file to start a fresh import.</Typography>
+                                </Box>
+                                <Button variant="outlined" startIcon={<RefreshIcon />} onClick={handleImportAnother} sx={{ flexShrink: 0 }}>
+                                    Import another file
+                                </Button>
+                            </Box>
+                        )}
                         <div className="scrollview" >
-                            <TableContainer component={Paper} sx={{ minWidth: 900, maxWidth: '60%', maxHeight: '70vh', margin: '0 auto' }}>
+                            <TableContainer component={Paper} sx={{ maxHeight: '70vh' }}>
                                 <Table stickyHeader aria-label="collapsible sticky table">
                                     <TableHead>
                                         <TableRow className="Header-Row">
