@@ -2,7 +2,7 @@ import { Alert, Box, Card, CardContent, LinearProgress, Stack, Typography } from
 import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
 import SavingsIcon from '@mui/icons-material/Savings';
 import { useEffect, useState } from "react";
-import { FF3Account, FF3AccountRole, FF3Wrapper } from "@/lib/interfaces";
+import { AccountRoleProperty, type AccountRead } from "@billos/firefly-iii-sdk";
 import ApiService from "@/lib/apiService";
 import utils from "@/lib/utils";
 import { tokens } from '@/theme';
@@ -27,7 +27,7 @@ const balanceCardSx = {
 
 const Summary = (props: SummaryProps) => {
 
-    const [account, setAccount] = useState<FF3Wrapper<FF3Account> | null>(null);
+    const [account, setAccount] = useState<AccountRead | null>(null);
     const [accountBalance, setAccountBalance] = useState(0);
     const [bankBalance, setBankBalance] = useState(0);
     const [diff, setDiff] = useState<number>(props.bankBalance);
@@ -48,7 +48,7 @@ const Summary = (props: SummaryProps) => {
                 // console.log('account Balance', aBalance);
                 // If the account has a virtual balance, then take that into account
                 // NOTE: these balances are sometimes positive and sometimes negative for credit cards so they are hard to handle.
-                if (theAccount.attributes.account_role === FF3AccountRole.CREDIT_CARD_ASSET &&virtualBalance !== 0) {
+                if (theAccount.attributes.account_role === AccountRoleProperty.CC_ASSET && virtualBalance !== 0) {
                     bBalance = virtualBalance + -1 * Math.abs(bBalance);
                     aBalance = virtualBalance + -1 * Math.abs(aBalance);
                 }
@@ -81,9 +81,9 @@ const Summary = (props: SummaryProps) => {
             <Card variant="outlined">
                 <CardContent>
                     <Typography sx={{ fontSize: '13px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.8px', color: 'primary.light', mb: 2, textAlign: 'center' }}>
-                        {(account as unknown as FF3Wrapper<FF3Account>)?.attributes.name}
+                        {account?.attributes.name}
                         {' — '}
-                        {(account as unknown as FF3Wrapper<FF3Account>)?.attributes.account_number}
+                        {account?.attributes.account_number}
                     </Typography>
 
                     <Stack direction="row" alignItems="center" spacing={2}>

@@ -3,11 +3,19 @@ import ApiService from './lib/apiService';
 import Utils from './lib/utils';
 import moment from 'moment';
 import './App.css';
-import { FF3Account, FF3AccountRole, FF3AddTransactionWrapper, FF3Error, FF3NewAccount, FF3TransactionSplit, FF3TransactionType, FF3Wrapper, IntuitBankInfo, OfxAccountStatus, OfxData, OfxParsedTransaction } from '@/lib/interfaces';
+import { FF3NewAccount, IntuitBankInfo, MatchedTransaction, OfxAccountStatus, OfxData, OfxParsedTransaction } from '@/lib/interfaces';
+import {
+    AccountRoleProperty,
+    TransactionTypeProperty,
+    type AccountRead,
+    type TransactionStoreWritable,
+    type ValidationErrorResponse,
+} from '@billos/firefly-iii-sdk';
 import Button from '@mui/material/Button';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import CheckIcon from '@mui/icons-material/Check';
-import { Alert, AppBar, Box, Card, CardContent, Checkbox, Chip, Collapse, FormControlLabel, MenuItem, Paper, Select, SelectChangeEvent, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Toolbar, Typography } from '@mui/material';
+import CloseIcon from '@mui/icons-material/Close';
+import { Alert, AppBar, Box, Card, CardContent, Checkbox, Collapse, FormControl, FormControlLabel, IconButton, InputLabel, MenuItem, Paper, Select, SelectChangeEvent, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Toolbar, Typography } from '@mui/material';
 import * as OFXParser from 'node-ofx-parser';
 import Summary from './components/Summary';
 import OfxTransactionsRow from '@/components/OfxTransactionsRow';
@@ -36,11 +44,11 @@ interface Token {
 function App() {
     const [token, setToken] = useState<Token>();
     // List of all accounts
-    const [accounts, setAccounts] = useState<FF3Wrapper<FF3Account>[]>();
+    const [accounts, setAccounts] = useState<AccountRead[]>();
     // The selected account for which transactions are being processed
-    const [selectedAccount, setSelectedAccount] = useState<FF3Wrapper<FF3Account>>();
+    const [selectedAccount, setSelectedAccount] = useState<AccountRead>();
     // The selected account for which transactions are being processed
-    const [matchingAccounts, setMatchingAccounts] = useState<FF3Wrapper<FF3Account>[]>();
+    const [matchingAccounts, setMatchingAccounts] = useState<AccountRead[]>();
     // Bank name
     const [bankName, setBankName] = useState<string>('');
     // These are the processed transactions
@@ -55,7 +63,7 @@ function App() {
     const [progress, setProgress] = useState(0);
     // The current progress for the transactions being processed
     const [showFileDrop, setShowFileDrop] = useState(true);
-    const [errorMessage, setErrorMessage] = useState<string>('');
+    const [errorMessage, setErrorMessage] = useState<string | undefined>(undefined);
     // Set to true if an update is available
     const [updateAvailable, setUpdateAvailable] = useState(false);
     const [newAccountData, setNewAccountData] = useState<FF3NewAccount | undefined>();
@@ -77,6 +85,7 @@ function App() {
      * Fetch the list of accounts
      */
     const init = useCallback(async (currentToken?: Token) => {
+        console.warn('fetching accounts: ', currentToken);
         ApiService.getAccounts(currentToken?.value).then(accntResponse => {
             // TODO: Fix response when token has expired.
             console.log('accntResponse', accntResponse);
@@ -90,18 +99,23 @@ function App() {
                     setToken(currentToken);
                 }
             } else if (accntResponse === null) {  // If the response is null, that means we got an unauthorized response
-                // Delete localstorage
-                localStorage.removeItem('token');
                 if (currentToken && (!token || !token.value)) {
                     setToken(undefined);
                 }
                 ApiService.reset();
             }
         }).catch(e => {
-            console.log('could not get accounts', e);
-            // // Delete localstorage
-            // localStorage.removeItem('token');
-            // setToken(undefined);
+            console.error('could not get accounts', e);
+            if (currentToken && currentToken.value?.length > 0) {
+                // localStorage.removeItem('token');
+                ApiService.reset();
+                setToken(undefined);
+                // Set the error on timeout to allow the page to render
+                // setTimeout(() => {
+                console.log("setting error");
+                setErrorMessage(e.message);
+                // }, 5000); 
+            }
         });
     }, [token]);
 
@@ -113,7 +127,7 @@ function App() {
         }
         if (accounts && accounts?.length >= 0) {
             // Make sure we do not have an error
-            setErrorMessage('');
+            setErrorMessage(undefined);
             // Find the account
             const theAccount = accounts.find(account => {
                 return account && account.attributes?.account_number === accountOfxData?.accounts[ofxAccountIndex].accountNumber;
@@ -161,11 +175,11 @@ function App() {
                             )?.name || '';
                         setBankName(bankName);
                         console.log('accountOfxData.accounts[ofxAccountIndex].accountType?.toLowerCase()', accountOfxData.accounts[ofxAccountIndex].accountType?.toLowerCase());
-                        console.log('accountOfxData ROLE', accountOfxData.accounts[ofxAccountIndex].accountType?.toLowerCase() === 'savings' ? FF3AccountRole.SAVING_ASSET : accountOfxData.accounts[ofxAccountIndex].accountType?.toLowerCase() === 'checking' ? FF3AccountRole.DEFAULT_ASSET : FF3AccountRole.CREDIT_CARD_ASSET);
+                        console.log('accountOfxData ROLE', accountOfxData.accounts[ofxAccountIndex].accountType?.toLowerCase() === 'savings' ? AccountRoleProperty.SAVING_ASSET : accountOfxData.accounts[ofxAccountIndex].accountType?.toLowerCase() === 'checking' ? AccountRoleProperty.DEFAULT_ASSET : AccountRoleProperty.CC_ASSET);
                         console.log('accountOfxData.accounts[ofxAccountIndex].accountType', accountOfxData.accounts[ofxAccountIndex].accountType);
                         console.log('accountOfxData.accounts[ofxAccountIndex].accountNumber', accountOfxData.accounts[ofxAccountIndex].accountNumber);
                         console.log('accountOfxData NAME', accountOfxData.accounts[ofxAccountIndex].accountType + ' ' + accountOfxData.accounts[ofxAccountIndex].accountNumber.substring(accountOfxData.accounts[ofxAccountIndex].accountNumber.length-4));
-                        const role = accountOfxData.accounts[ofxAccountIndex].accountType?.toLowerCase() === 'savings' ? FF3AccountRole.SAVING_ASSET : accountOfxData.accounts[ofxAccountIndex].accountType?.toLowerCase() === 'checking' ? FF3AccountRole.DEFAULT_ASSET : FF3AccountRole.CREDIT_CARD_ASSET;
+                        const role = accountOfxData.accounts[ofxAccountIndex].accountType?.toLowerCase() === 'savings' ? AccountRoleProperty.SAVING_ASSET : accountOfxData.accounts[ofxAccountIndex].accountType?.toLowerCase() === 'checking' ? AccountRoleProperty.DEFAULT_ASSET : AccountRoleProperty.CC_ASSET;
                         setNewAccountData({
                             name: accountOfxData.accounts[ofxAccountIndex].accountType + ' ' + accountOfxData.accounts[ofxAccountIndex].accountNumber.substring(accountOfxData.accounts[ofxAccountIndex].accountNumber.length-4),
                             number: accountOfxData.accounts[ofxAccountIndex].accountNumber,
@@ -196,7 +210,7 @@ function App() {
         setOfxData(undefined);
         setProcessed(false);
         setShowFileDrop(true);
-        setErrorMessage('');
+        setErrorMessage(undefined);
         setNewAccountData(undefined);
     }, [matchingAccounts, progress, selectedAccount, transactions]);
 
@@ -210,7 +224,7 @@ function App() {
 
     const showFile = useCallback((files: File[]) => {
         console.log('showFile files[0].name', files[0]);
-        setErrorMessage('');
+        setErrorMessage(undefined);
 
         if (files.length > 1 || (files[0] && !(/\.(ofx|qfx)$/gi).test(files[0].name))) {
             console.log('Too many files');
@@ -263,10 +277,11 @@ function App() {
         }
     }, [ofxData, ofxAccountIndex, resetState, processAccount]);
 
-    const selectAccount = async (accnt: FF3Wrapper<FF3Account>) => {
+    const selectAccount = async (accnt: AccountRead) => {
         setProcessed(false);
         setSelectedAccount(accnt);
         setMatchingAccounts(undefined);
+        setErrorMessage(undefined);
     };
 
     const createAccount = async (accountData: FF3NewAccount | undefined) => {
@@ -282,7 +297,7 @@ function App() {
                 setSelectedAccount(accnt);
                 setMatchingAccounts(undefined);
                 setAccounts(undefined);
-                setErrorMessage('');
+                setErrorMessage(undefined);
                 return;
             } 
         }
@@ -308,22 +323,23 @@ function App() {
     };
 
     // This method adds a new transaction to the Firefly account
-    const addTransaction = useCallback(async (newTxn: FF3AddTransactionWrapper<FF3TransactionSplit>): Promise<OfxParsedTransaction["importStatus"]> => {
+    const addTransaction = useCallback(async (newTxn: TransactionStoreWritable): Promise<OfxParsedTransaction["importStatus"]> => {
         console.log('Adding new transaction', newTxn);
         let newTransaction: OfxParsedTransaction["importStatus"];
         const newTransactionResp = await ApiService.addTransaction(newTxn);
 
-        if (newTransactionResp && !(newTransactionResp as FF3Error).message) {
+        if (newTransactionResp && !(newTransactionResp as ValidationErrorResponse).message) {
             console.log('Added new transaction successfully', newTransactionResp);
             newTransaction = {
                 status: 'success',
             };
         } else {
             console.log('New transaction failed', newTransactionResp);
+            const err = newTransactionResp as ValidationErrorResponse;
             newTransaction = {
                 status: 'failure',
-                statusMessage: (newTransactionResp as FF3Error).message,
-                statusError: (newTransactionResp as FF3Error).errors,
+                statusMessage: err.message,
+                statusError: err.errors,
                 ff3Txn: newTxn,
             };
         }
@@ -360,7 +376,7 @@ function App() {
                     moment(parsedTxn.datePosted).add(-3, 'days'),
                     moment(parsedTxn.datePosted).add(3, 'days'),
                 ),
-                    matchingTransactions = [];
+                    matchingTransactions: MatchedTransaction[] = [];
                 let proceed = true,
                     exactMatchFound = false;
 
@@ -428,8 +444,9 @@ function App() {
                             !matchingTransactions.includes(ffTxn)
                         ) {
                             console.log('********** Found TOTAL match');
-                            ffTxn.totalMatch = true; // Lets set a custom property so we can display this differently in matched transactions
-                            matchingTransactions.push(ffTxn);
+                            const matched: MatchedTransaction = ffTxn;
+                            matched.totalMatch = true; // Lets set a custom property so we can display this differently in matched transactions
+                            matchingTransactions.push(matched);
                             // proceed = false;
                         }
                         if (exactMatchFound) {
@@ -438,13 +455,13 @@ function App() {
                     }
                 }
 
-                const newTxn: FF3AddTransactionWrapper<FF3TransactionSplit> = {
+                const newTxn: TransactionStoreWritable = {
                     error_if_duplicate_hash: true,
                     apply_rules: true,
                     group_title: null,
                     transactions: [
                         {
-                            type: parsedTxn.amount >= 0 ? FF3TransactionType.DEPOSIT : FF3TransactionType.WITHDRAWAL,
+                            type: parsedTxn.amount >= 0 ? TransactionTypeProperty.DEPOSIT : TransactionTypeProperty.WITHDRAWAL,
                             date: parsedTxn.datePosted.format(),
                             amount: String(Math.abs(parsedAmount)),
                             description: parsedTxn.description,
@@ -504,7 +521,7 @@ function App() {
             setProcessed(true);
             console.log('Processed Transactions', progress, transactions);
         }
-    }, [ofxData, transactions, ofxAccountIndex, selectedAccount, progress, addTransaction, resetState]);
+    }, [ofxData, transactions, ofxAccountIndex, selectedAccount, progress, addTransaction]);
 
     /**
      * Start processing transactions when proper state is set.
@@ -528,9 +545,10 @@ function App() {
         // console.log('localStorage.getItem(\'token\')', (localStorage.getItem('token') ?? null));
         const localToken = JSON.parse(localStorage.getItem('token') || '{}');
         if (localToken && localToken.value) {
-            // setToken(localToken);
+            console.debug('Found local token!  Fetching accounts...');
             // initialize the http client
             if (!accounts) {
+                console.debug('Fetching accounts(localToken)...');
                 ApiService.getHttp(localToken.value);
                 init(localToken);
             }
@@ -545,7 +563,7 @@ function App() {
         if (ofxAccountIndex > 0) {
             processAccount();
         }
-    }, [ofxAccountIndex]);
+    }, [ofxAccountIndex, processAccount]);
 
 
     // This is used to process the next account in a multi-account ofx file
@@ -607,7 +625,10 @@ function App() {
                         </Box>
                     ))}
                 </Box>
-                <Collapse in={!token}>
+                <Collapse in={!!errorMessage} unmountOnExit>
+                    <Alert severity="error" action={<IconButton size="small" onClick={() => { setErrorMessage(undefined); }}><CloseIcon /></IconButton>}>{errorMessage}</Alert>
+                </Collapse>
+                <Collapse in={!token} unmountOnExit>
                     <Card sx={{ width: 500 }}>
                         <CardContent sx={{ p: 3 }}>
                             <Typography variant='subtitle1' sx={{ mb: 1 }}>Connect to FireFly III</Typography>
@@ -646,7 +667,7 @@ function App() {
                         </CardContent>
                     </Card>
                 </Collapse>
-                <Collapse in={!!token && showFileDrop}>
+                <Collapse in={!!token && showFileDrop}  unmountOnExit>
                     <Card sx={{ width: 560 }}>
                         <CardContent sx={{ p: 3 }}>
                             <Typography variant='subtitle2' sx={{ mb: 2, textTransform: 'uppercase', letterSpacing: '0.8px', color: 'primary.light' }}>
@@ -656,141 +677,169 @@ function App() {
                         </CardContent>
                     </Card>
                 </Collapse>
-                <Collapse in={ofxData && ofxData?.accounts.length > 1}>
+                <Collapse in={ofxData && ofxData?.accounts.length > 1}  unmountOnExit>
                     <OfxSummary accounts={ofxData?.accounts || []} clickHandler={handleNextAccount} selectionAllowed={processed}/>
                 </Collapse>
-                <Collapse in={!!token && !showFileDrop && !!matchingAccounts && matchingAccounts.length > 1}>
-                    <Typography variant='h5' sx={{ m: 5 }}>Multiple accounts matches found!  Please select one of the accounts below to import the transactions</Typography>
-                    <div className="scrollview" >
-                        <TableContainer component={Paper} sx={{ minWidth: 900, maxWidth: '60%', maxHeight: '70vh', margin: '0 auto' }}>
-                            <Table stickyHeader aria-label="collapsible sticky table">
-                                <TableHead>
-                                    <TableRow>
-                                        <TableCell colSpan={3} style={{ backgroundColor: '#eee' }}>
-                                            <Typography sx={{ m: 1 }}>
-                                                <b>Account Number:</b> {ofxData?.accounts[ofxAccountIndex].accountNumber}, <b>Account Type:</b> {ofxData?.accounts[ofxAccountIndex].accountType}, <b>Org:</b> {ofxData?.org}, <b>Bank:</b> {bankName} ({ofxData?.intuitId})
+                <Collapse in={!!token && !showFileDrop && !!matchingAccounts && matchingAccounts.length > 1}  unmountOnExit>
+                    <Card sx={{ width: 720 }}>
+                        <CardContent sx={{ p: 3 }}>
+                            <Typography variant='subtitle2' sx={{ mb: 1, textTransform: 'uppercase', letterSpacing: '0.8px', color: 'primary.light' }}>
+                                Pick an Account
+                            </Typography>
+                            <Typography variant='subtitle1' sx={{ mb: 1 }}>Multiple matching accounts found</Typography>
+                            <Typography variant='body2' sx={{ mb: 3, color: 'text.secondary' }}>
+                                Select the FireFly III account that should receive the transactions from this file.
+                            </Typography>
+
+                            <Box sx={{
+                                display: 'grid',
+                                gridTemplateColumns: 'max-content 1fr',
+                                columnGap: 2,
+                                rowGap: 1,
+                                p: 2,
+                                mb: 2,
+                                backgroundColor: 'background.default',
+                                border: '1px solid',
+                                borderColor: 'divider',
+                                borderRadius: 2,
+                            }}>
+                                <Typography variant='caption' sx={{ color: 'text.secondary', textTransform: 'uppercase', letterSpacing: '0.6px' }}>Account Number</Typography>
+                                <Typography variant='body2'>{ofxData?.accounts[ofxAccountIndex].accountNumber || '—'}</Typography>
+                                <Typography variant='caption' sx={{ color: 'text.secondary', textTransform: 'uppercase', letterSpacing: '0.6px' }}>Account Type</Typography>
+                                <Typography variant='body2'>{ofxData?.accounts[ofxAccountIndex].accountType || '—'}</Typography>
+                                {ofxData?.org && (
+                                    <>
+                                        <Typography variant='caption' sx={{ color: 'text.secondary', textTransform: 'uppercase', letterSpacing: '0.6px' }}>Org</Typography>
+                                        <Typography variant='body2'>{ofxData.org}</Typography>
+                                    </>
+                                )}
+                                {(bankName || ofxData?.intuitId) && (
+                                    <>
+                                        <Typography variant='caption' sx={{ color: 'text.secondary', textTransform: 'uppercase', letterSpacing: '0.6px' }}>Bank</Typography>
+                                        <Typography variant='body2'>
+                                            {bankName || '—'}
+                                            {ofxData?.intuitId && <Box component="span" sx={{ color: 'text.secondary', ml: 1 }}>({ofxData.intuitId})</Box>}
+                                        </Typography>
+                                    </>
+                                )}
+                            </Box>
+
+                            <Stack spacing={1} sx={{ maxHeight: '50vh', overflowY: 'auto', pr: 1 }}>
+                                {matchingAccounts?.map((accnt) => (
+                                    <Box key={`ofxAccnt_${accnt.attributes.account_number}`} sx={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'space-between',
+                                        gap: 2,
+                                        p: 2,
+                                        backgroundColor: 'background.default',
+                                        border: '1px solid',
+                                        borderColor: 'divider',
+                                        borderRadius: 2,
+                                    }}>
+                                        <Box sx={{ minWidth: 0, flex: 1 }}>
+                                            <Typography variant='subtitle2' sx={{ mb: '4px' }}>{accnt.attributes.name}</Typography>
+                                            <Typography variant='caption' sx={{ color: 'text.secondary', display: 'block' }}>
+                                                Account #{accnt.attributes.account_number || '—'}
+                                                {accnt.attributes.iban && <> · IBAN {accnt.attributes.iban}</>}
+                                                {accnt.attributes.bic && <> · BIC {accnt.attributes.bic}</>}
                                             </Typography>
-                                        </TableCell>
-                                    </TableRow>
-                                    <TableRow className="Header-Row">
-                                        <TableCell className="Header-Row">Name</TableCell>
-                                        <TableCell align="center">Details</TableCell>
-                                        <TableCell align="center">Action</TableCell>
-                                    </TableRow>
-                                </TableHead>
-                                <TableBody>
-                                    {matchingAccounts?.map((accnt) => (
-                                        <TableRow key={`ofxAccnt_${accnt.attributes.account_number}`}>
-                                            <TableCell>{accnt.attributes.name}</TableCell>
-                                            <TableCell><b>Account Number:</b> {accnt.attributes.account_number}<br /><b>IBAN:</b> {accnt.attributes.iban}<br /><b>BIC:</b> {accnt.attributes.bic}</TableCell>
-                                            <TableCell align="center">
-                                                <Button
-                                                    variant="contained"
-                                                    onClick={() => selectAccount(accnt)}>
-                                                    <CheckIcon /> Select
-                                                </Button>
-                                            </TableCell>
-                                        </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
-                        </TableContainer>
-                    </div>
+                                        </Box>
+                                        <Button
+                                            variant="contained"
+                                            startIcon={<CheckIcon />}
+                                            onClick={() => selectAccount(accnt)}
+                                            sx={{ flexShrink: 0 }}
+                                        >
+                                            Select
+                                        </Button>
+                                    </Box>
+                                ))}
+                            </Stack>
+                        </CardContent>
+                    </Card>
                 </Collapse>
-                <Collapse in={!!token && !showFileDrop && !!newAccountData}>
-                    <Typography variant='h5' sx={{ m: 5 }}>No matching accounts were found.  Would you like to create the account?</Typography>
-                    <div className="scrollview" >
-                        <TableContainer component={Paper} sx={{ minWidth: 900, maxWidth: '60%', maxHeight: '70vh', margin: '0 auto' }}>
-                            <Table stickyHeader aria-label="collapsible sticky table">
-                                <TableBody>
-                                    <TableRow>
-                                        <TableCell align="right">
-                                            <Typography sx={{ m: 1 }}>
-                                                <b>Account Name:</b>
-                                            </Typography>
-                                        </TableCell>
-                                        <TableCell>
-                                            <TextField id="newAccountName" fullWidth variant="outlined" defaultValue={newAccountData?.name} onBlur={(event: React.FocusEvent<HTMLInputElement>) => setNewAccountData({number: '', ...newAccountData, name: (event.target.value || '') } ) }/>
-                                        </TableCell>
-                                    </TableRow>
-                                    <TableRow>
-                                        <TableCell align="right">
-                                            <Typography sx={{ m: 1 }}>
-                                                <b>Account Number:</b>
-                                            </Typography>
-                                        </TableCell>
-                                        <TableCell>
-                                                <TextField id="newAccountNumber" fullWidth variant="outlined" defaultValue={newAccountData?.number} onBlur={(event: React.FocusEvent<HTMLInputElement>) => setNewAccountData({name: '', ...newAccountData, number: (event.target.value || '???') } ) }/>
-                                        </TableCell>
-                                    </TableRow>
-                                    <TableRow>
-                                        <TableCell align="right">
-                                            <Typography sx={{ m: 1 }}>
-                                                <b>Currency:</b>
-                                            </Typography>
-                                        </TableCell>
-                                        <TableCell>
-                                            <Typography sx={{ m: 1 }}>
-                                                {newAccountData?.currency}
-                                            </Typography>
-                                        </TableCell>
-                                    </TableRow>
-                                    <TableRow>
-                                        <TableCell align="right">
-                                            <Typography sx={{ m: 1 }}>
-                                                <b>Account Type:</b>
-                                            </Typography>
-                                        </TableCell>
-                                        <TableCell>
-                                            <Select
-                                                id="demo-simple-select"
-                                                value={newAccountData?.role || 'defaultAsset'}
-                                                label="Type"
-                                                onChange={(event: SelectChangeEvent) => {
-                                                    setNewAccountData({number: '', name: '', ...newAccountData, role: event.target.value as FF3AccountRole });
-                                                  }}
-                                            >
-                                                <MenuItem value={'defaultAsset'}>Default Asset ({newAccountData?.role})</MenuItem>
-                                                <MenuItem value={'sharedAsset'}>Shared Asset</MenuItem>
-                                                <MenuItem value={'savingAsset'}>Savings Asset</MenuItem>
-                                                <MenuItem value={'ccAsset'}>Credit Card</MenuItem>
-                                                <MenuItem value={'cashWalletAsset'}>Cash Wallet</MenuItem>
-                                            </Select>
-                                        </TableCell>
-                                    </TableRow>
-                                    { newAccountData?.institution && (<TableRow>
-                                        <TableCell align="right">
-                                            <Typography sx={{ m: 1 }}>
-                                                <b>Institution:</b>
-                                            </Typography>
-                                        </TableCell>
-                                        <TableCell>
-                                            <Typography sx={{ m: 1 }}>
-                                                {newAccountData?.institution}
-                                            </Typography>
-                                        </TableCell>
-                                    </TableRow>
+                <Collapse in={!!token && !showFileDrop && !!newAccountData}  unmountOnExit>
+                    <Card sx={{ width: 560 }}>
+                        <CardContent sx={{ p: 3 }}>
+                            <Typography variant='subtitle2' sx={{ mb: 1, textTransform: 'uppercase', letterSpacing: '0.8px', color: 'primary.light' }}>
+                                Create Account
+                            </Typography>
+                            <Typography variant='subtitle1' sx={{ mb: 1 }}>No matching account found</Typography>
+                            <Typography variant='body2' sx={{ mb: 3, color: 'text.secondary' }}>
+                                None of your FireFly III accounts matched the account number in this file.
+                                Create one below to import the transactions.
+                            </Typography>
+
+                            <Stack spacing={2}>
+                                <TextField
+                                    id="newAccountName"
+                                    label="Account Name"
+                                    fullWidth
+                                    variant="filled"
+                                    defaultValue={newAccountData?.name}
+                                    onBlur={(event: React.FocusEvent<HTMLInputElement>) => setNewAccountData({ number: '', ...newAccountData, name: (event.target.value || '') })}
+                                />
+                                <TextField
+                                    id="newAccountNumber"
+                                    label="Account Number"
+                                    fullWidth
+                                    variant="filled"
+                                    defaultValue={newAccountData?.number}
+                                    onBlur={(event: React.FocusEvent<HTMLInputElement>) => setNewAccountData({ name: '', ...newAccountData, number: (event.target.value || '???') })}
+                                />
+                                <FormControl fullWidth variant="filled">
+                                    <InputLabel id="newAccountRole-label">Account Type</InputLabel>
+                                    <Select
+                                        labelId="newAccountRole-label"
+                                        id="newAccountRole"
+                                        value={newAccountData?.role || 'defaultAsset'}
+                                        onChange={(event: SelectChangeEvent) => {
+                                            setNewAccountData({ number: '', name: '', ...newAccountData, role: event.target.value as AccountRoleProperty });
+                                        }}
+                                    >
+                                        <MenuItem value={'defaultAsset'}>Default Asset</MenuItem>
+                                        <MenuItem value={'sharedAsset'}>Shared Asset</MenuItem>
+                                        <MenuItem value={'savingAsset'}>Savings Asset</MenuItem>
+                                        <MenuItem value={'ccAsset'}>Credit Card</MenuItem>
+                                        <MenuItem value={'cashWalletAsset'}>Cash Wallet</MenuItem>
+                                    </Select>
+                                </FormControl>
+
+                                <Box sx={{
+                                    display: 'grid',
+                                    gridTemplateColumns: 'max-content 1fr',
+                                    columnGap: 2,
+                                    rowGap: 1,
+                                    p: 2,
+                                    backgroundColor: 'background.default',
+                                    border: '1px solid',
+                                    borderColor: 'divider',
+                                    borderRadius: 2,
+                                }}>
+                                    <Typography variant='caption' sx={{ color: 'text.secondary', textTransform: 'uppercase', letterSpacing: '0.6px' }}>Currency</Typography>
+                                    <Typography variant='body2'>{newAccountData?.currency || '—'}</Typography>
+                                    {newAccountData?.institution && (
+                                        <>
+                                            <Typography variant='caption' sx={{ color: 'text.secondary', textTransform: 'uppercase', letterSpacing: '0.6px' }}>Institution</Typography>
+                                            <Typography variant='body2'>{newAccountData.institution}</Typography>
+                                        </>
                                     )}
-                                    { newAccountData?.bank && (<TableRow>
-                                        <TableCell align="right">
-                                            <Typography sx={{ m: 1 }}>
-                                                <b>Bank:</b>
-                                            </Typography>
-                                        </TableCell>
-                                        <TableCell>
-                                            <Typography sx={{ m: 1 }}>
-                                                {newAccountData?.bank}
-                                            </Typography>
-                                        </TableCell>
-                                    </TableRow>
+                                    {newAccountData?.bank && (
+                                        <>
+                                            <Typography variant='caption' sx={{ color: 'text.secondary', textTransform: 'uppercase', letterSpacing: '0.6px' }}>Bank</Typography>
+                                            <Typography variant='body2'>{newAccountData.bank}</Typography>
+                                        </>
                                     )}
-                                </TableBody>
-                            </Table>
-                        </TableContainer>
-                        <br/><br/>
-                        <Button variant="outlined" size="small" color="secondary" onClick={() => { window.location.reload() }}>Cancel</Button> &nbsp;
-                        <Button variant="contained" size="small" color="success" onClick={() => { createAccount(newAccountData) }}>Add Account</Button> 
-                    </div>
+                                </Box>
+                            </Stack>
+
+                            <Stack direction="row" justifyContent="flex-end" spacing={1} sx={{ mt: 3 }}>
+                                <Button variant="outlined" color="secondary" onClick={() => { window.location.reload(); }}>Cancel</Button>
+                                <Button variant="contained" color="success" onClick={() => { createAccount(newAccountData); }}>Add Account</Button>
+                            </Stack>
+                        </CardContent>
+                    </Card>
                 </Collapse>
                 {transactions && transactions.length > 0 && (
                     <>
