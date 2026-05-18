@@ -3,14 +3,21 @@ import axios from 'axios';
 import { createClient, type Client } from '@billos/firefly-iii-sdk/client';
 import {
     AccountsService,
+    BillsService,
+    BudgetsService,
+    CategoriesService,
     TransactionsService,
     AccountRoleProperty,
     CreditCardTypeProperty,
     ShortAccountTypeProperty,
     type AccountRead,
     type AccountStore,
+    type BillRead,
+    type BudgetRead,
+    type CategoryRead,
     type TransactionRead,
     type TransactionStoreWritable,
+    type TransactionUpdateWritable,
     type ValidationErrorResponse,
     BadRequestResponse,
     UnauthenticatedResponse,
@@ -250,6 +257,126 @@ const addTransaction = async (
     return (error as ValidationErrorResponse | undefined) ?? null;
 };
 
+const updateTransaction = async (
+    id: string,
+    body: TransactionUpdateWritable,
+): Promise<TransactionRead | ValidationErrorResponse | null> => {
+    const c = getClient();
+    if (!c) return null;
+    const { data, error } = await TransactionsService.updateTransaction({
+        client: c,
+        throwOnError: false,
+        path: { id },
+        body,
+    });
+    if (data?.data) return data.data;
+    return (error as ValidationErrorResponse | undefined) ?? null;
+};
+
+const deleteTransaction = async (id: string): Promise<boolean> => {
+    const c = getClient();
+    if (!c) return false;
+    const { response, error } = await TransactionsService.deleteTransaction({
+        client: c,
+        throwOnError: false,
+        path: { id },
+    });
+    if (error) {
+        throw buildRequestError(`DELETE /transactions/${id}`, response, error as never);
+    }
+    return response?.status === 204 || response?.status === 200;
+};
+
+async function* pageThroughGeneric<T>(
+    fetchPage: (page: number) => Promise<{
+        data?: { data: T[]; meta?: { pagination?: { total_pages?: number; current_page?: number } } };
+        error?: unknown;
+        response?: Response;
+    }>,
+    endpoint: string,
+): AsyncGenerator<T, void, unknown> {
+    let currentPage = 1;
+    for (;;) {
+        const { data, error, response } = await fetchPage(currentPage);
+        if (error || !data) {
+            throw buildRequestError(endpoint, response, error as never);
+        }
+        for (const item of data.data) yield item;
+        const total = data.meta?.pagination?.total_pages ?? 1;
+        const cur = data.meta?.pagination?.current_page ?? 1;
+        if (cur >= total) return;
+        currentPage = cur + 1;
+    }
+}
+
+const listAllAccounts = async (): Promise<AccountRead[]> => {
+    const c = getClient();
+    if (!c) return [];
+    const out: AccountRead[] = [];
+    for await (const a of pageThroughGeneric<AccountRead>(
+        (page) => AccountsService.listAccount({
+            client: c,
+            throwOnError: false,
+            query: { limit: PAGE_SIZE, page },
+        }),
+        'GET /accounts',
+    )) {
+        out.push(a);
+    }
+    return out;
+};
+
+const listCategories = async (): Promise<CategoryRead[]> => {
+    const c = getClient();
+    if (!c) return [];
+    const out: CategoryRead[] = [];
+    for await (const item of pageThroughGeneric<CategoryRead>(
+        (page) => CategoriesService.listCategory({
+            client: c,
+            throwOnError: false,
+            query: { limit: PAGE_SIZE, page },
+        }),
+        'GET /categories',
+    )) {
+        out.push(item);
+    }
+    return out;
+};
+
+const listBudgets = async (): Promise<BudgetRead[]> => {
+    const c = getClient();
+    if (!c) return [];
+    const out: BudgetRead[] = [];
+    for await (const item of pageThroughGeneric<BudgetRead>(
+        (page) => BudgetsService.listBudget({
+            client: c,
+            throwOnError: false,
+            query: { limit: PAGE_SIZE, page },
+        }),
+        'GET /budgets',
+    )) {
+        out.push(item);
+    }
+    return out;
+};
+
+const listBills = async (): Promise<BillRead[]> => {
+    const c = getClient();
+    if (!c) return [];
+    const out: BillRead[] = [];
+    for await (const item of pageThroughGeneric<BillRead>(
+        (page) => BillsService.listBill({
+            client: c,
+            throwOnError: false,
+            query: { limit: PAGE_SIZE, page },
+        }),
+        'GET /bills',
+    )) {
+        out.push(item);
+    }
+    return out;
+};
+
 const ApiService = {
     reset,
     getClient,
@@ -260,6 +387,12 @@ const ApiService = {
     getTransactions,
     getAccountTransactions,
     addTransaction,
+    updateTransaction,
+    deleteTransaction,
+    listAllAccounts,
+    listCategories,
+    listBudgets,
+    listBills,
     getLatestVersion,
 };
 

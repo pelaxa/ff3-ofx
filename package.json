@@ -12,6 +12,7 @@
     }
   ],
   "dependencies": {
+    "@base-ui/react": "^1.4.1",
     "@billos/firefly-iii-sdk": "^6.5.5-sdk.3",
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",

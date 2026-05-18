@@ -3,8 +3,11 @@ import { Button, Chip, TableCell, TableRow } from "@mui/material";
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 import AddIcon from '@mui/icons-material/Add';
+import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
+import type { AccountRead, BillRead, BudgetRead, CategoryRead, TransactionRead } from '@billos/firefly-iii-sdk';
 import { OfxParsedTransaction } from "@/lib/interfaces";
 import OfxTransactionRow from "./OfxMatchingTransactionsTable";
+import TransactionEditor from "./TransactionEditor";
 import utils from "@/lib/utils";
 
 
@@ -12,12 +15,36 @@ interface OfxTransactionsTableProps {
     transaction: OfxParsedTransaction;
     index: number;
     importTransaction: (existingTxn: OfxParsedTransaction) => void;
-    
+    // Edit support — when provided the row exposes an Edit button on any
+    // status that has an underlying FireFly transaction.
+    isEditing?: boolean;
+    onStartEdit?: (idx: number) => void;
+    onSaved?: (idx: number, updated: TransactionRead) => void;
+    onDeleted?: (idx: number) => void;
+    onCancelEdit?: () => void;
+    accounts?: AccountRead[];
+    categories?: CategoryRead[];
+    budgets?: BudgetRead[];
+    bills?: BillRead[];
 }
+
+const getEditableFireflyTxn = (t: OfxParsedTransaction): TransactionRead | undefined => {
+    const s = t.importStatus;
+    if (!s) return undefined;
+    if (s.ff3TxnImported) return s.ff3TxnImported;
+    if ((s.status === 'match-exact' || s.status === 'match-value')
+        && s.matchingTransactions
+        && s.matchingTransactions.length === 1) {
+        return s.matchingTransactions[0];
+    }
+    return undefined;
+};
 
 const OfxTransactionsRow = (props: OfxTransactionsTableProps) => {
 
     const [open, setOpen] = useState<boolean>(false);
+    const editable = getEditableFireflyTxn(props.transaction);
+    const edited = props.transaction.importStatus?.edited === true;
 
     const getStatus = (status: "success" | "failure" | "match-exact" | "match-value" | undefined) => {
         let jsx = <Chip label="✕ failed" variant="outlined"
@@ -41,6 +68,8 @@ const OfxTransactionsRow = (props: OfxTransactionsTableProps) => {
         return jsx;
     }
 
+    const canAddAnyway = !['match-exact', 'success'].includes(props.transaction.importStatus?.status || '');
+
     return (
         <Fragment key={`ofxTxn_${props.index}_root`}>
             <TableRow>
@@ -54,24 +83,75 @@ const OfxTransactionsRow = (props: OfxTransactionsTableProps) => {
                     {utils.getLocaleCurrency(props.transaction.amount)}
                 </TableCell>
                 <TableCell align="center">
-                    {getStatus(props.transaction.importStatus?.status)}
+                    <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}>
+                        {getStatus(props.transaction.importStatus?.status)}
+                        {edited && (
+                            <Chip
+                                size="small"
+                                label="✎ edited"
+                                variant="outlined"
+                                sx={{
+                                    fontSize: '10px',
+                                    height: '20px',
+                                    color: 'primary.light',
+                                    borderColor: 'rgba(144,202,249,.3)',
+                                    backgroundColor: 'rgba(144,202,249,.12)',
+                                }}
+                            />
+                        )}
+                    </span>
                 </TableCell>
                 <TableCell align="center">
-                    <Button
-                        variant="outlined"
-                        size="small"
-                        disabled={['match-exact', 'success'].includes(props.transaction.importStatus?.status || '')}
-                        onClick={() => props.importTransaction(props.transaction)}
-                        sx={{
-                            borderColor: 'divider',
-                            color: 'text.secondary',
-                            fontSize: '12px',
-                            '&:hover': { borderColor: 'primary.light', color: 'primary.light' },
-                        }}>
-                        <AddIcon sx={{ fontSize: '14px', mr: 0.5 }} /> Add anyways
-                    </Button>
+                    <span style={{ display: 'inline-flex', gap: 8, justifyContent: 'center' }}>
+                        {editable && props.onStartEdit && (
+                            <Button
+                                variant="outlined"
+                                size="small"
+                                onClick={() => props.onStartEdit?.(props.index)}
+                                sx={{
+                                    borderColor: 'divider',
+                                    color: props.isEditing ? 'primary.light' : 'text.secondary',
+                                    fontSize: '12px',
+                                    backgroundColor: props.isEditing ? 'rgba(144,202,249,.08)' : undefined,
+                                    '&:hover': { borderColor: 'primary.light', color: 'primary.light' },
+                                }}>
+                                <EditOutlinedIcon sx={{ fontSize: '14px', mr: 0.5 }} />
+                                {props.isEditing ? 'Editing…' : 'Edit'}
+                            </Button>
+                        )}
+                        {canAddAnyway && (
+                            <Button
+                                variant="outlined"
+                                size="small"
+                                onClick={() => props.importTransaction(props.transaction)}
+                                sx={{
+                                    borderColor: 'divider',
+                                    color: 'text.secondary',
+                                    fontSize: '12px',
+                                    '&:hover': { borderColor: 'primary.light', color: 'primary.light' },
+                                }}>
+                                <AddIcon sx={{ fontSize: '14px', mr: 0.5 }} /> Add anyways
+                            </Button>
+                        )}
+                    </span>
                 </TableCell>
             </TableRow>
+            {props.isEditing && editable && props.onSaved && props.onDeleted && props.onCancelEdit && (
+                <TableRow>
+                    <TableCell colSpan={5} sx={{ p: 0, borderBottom: '1px solid', borderColor: 'divider' }}>
+                        <TransactionEditor
+                            transaction={editable}
+                            accounts={props.accounts ?? []}
+                            categories={props.categories ?? []}
+                            budgets={props.budgets ?? []}
+                            bills={props.bills ?? []}
+                            onSaved={(updated) => props.onSaved?.(props.index, updated)}
+                            onDeleted={() => props.onDeleted?.(props.index)}
+                            onCancel={() => props.onCancelEdit?.()}
+                        />
+                    </TableCell>
+                </TableRow>
+            )}
             {['failure', 'match-value'].includes(props.transaction.importStatus?.status || '') && (
                 <OfxTransactionRow open={open} transaction={props.transaction} />
             )}

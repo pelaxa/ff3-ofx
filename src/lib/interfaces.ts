@@ -61,7 +61,13 @@ export interface OfxParsedTransaction {
         statusMessage?: string;
         statusError?: { [key: string]: string[] | undefined };
         matchingTransactions?: MatchedTransaction[];
-        ff3Txn?: TransactionStoreWritable;
+        // This is the ff3 transaction that is created to add the transaction
+        ff3Txn2Import?: TransactionStoreWritable;
+        // // This is the ff3 transaction after it was added
+        ff3TxnImported?: TransactionRead;
+        // Flipped to true after a successful edit so the row can show
+        // an "edited" indicator next to its status chip.
+        edited?: boolean;
     };
 }
 

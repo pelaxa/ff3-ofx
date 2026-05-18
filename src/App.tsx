@@ -8,6 +8,10 @@ import {
     AccountRoleProperty,
     TransactionTypeProperty,
     type AccountRead,
+    type BillRead,
+    type BudgetRead,
+    type CategoryRead,
+    type TransactionRead,
     type TransactionStoreWritable,
     type ValidationErrorResponse,
 } from '@billos/firefly-iii-sdk';
@@ -71,6 +75,16 @@ function App() {
     const [loginDisabled, setLoginDisabled] = useState(true);
     // Tracks the token field value so the login button can read it without querySelector
     const [tokenInput, setTokenInput] = useState('');
+    // Index (within `transactions`) of the row currently being edited; undefined when none
+    const [editingTxnIdx, setEditingTxnIdx] = useState<number | undefined>();
+    // Lazy-loaded metadata for the autocomplete fields in the editor
+    const [editorMetadata, setEditorMetadata] = useState<{
+        accounts: AccountRead[];
+        categories: CategoryRead[];
+        budgets: BudgetRead[];
+        bills: BillRead[];
+    }>();
+    const [metadataLoading, setMetadataLoading] = useState(false);
 
     const checkForUpdates = useCallback(async () => {
         const myVersion = `${__APP_VERSION__}`;
@@ -309,8 +323,8 @@ function App() {
 
     // This method adds a new transaction to the Firefly account based on user request
     const addAnyways = async (existingTxn: OfxParsedTransaction) => {
-        if (existingTxn.importStatus?.ff3Txn) {
-            const newTransaction = await addTransaction(existingTxn.importStatus?.ff3Txn);
+        if (existingTxn.importStatus?.ff3Txn2Import) {
+            const newTransaction = await addTransaction(existingTxn.importStatus?.ff3Txn2Import);
 
             if (newTransaction) {
                 existingTxn.importStatus = newTransaction;
@@ -332,6 +346,7 @@ function App() {
             console.log('Added new transaction successfully', newTransactionResp);
             newTransaction = {
                 status: 'success',
+                ff3TxnImported: newTransactionResp as TransactionRead,
             };
         } else {
             console.log('New transaction failed', newTransactionResp);
@@ -340,10 +355,76 @@ function App() {
                 status: 'failure',
                 statusMessage: err.message,
                 statusError: err.errors,
-                ff3Txn: newTxn,
+                ff3Txn2Import: newTxn,
             };
         }
         return newTransaction;
+    }, []);
+
+    const ensureEditorMetadata = useCallback(async () => {
+        if (editorMetadata || metadataLoading) return;
+        setMetadataLoading(true);
+        try {
+            const [allAccounts, categories, budgets, bills] = await Promise.all([
+                ApiService.listAllAccounts(),
+                ApiService.listCategories(),
+                ApiService.listBudgets(),
+                ApiService.listBills(),
+            ]);
+            setEditorMetadata({ accounts: allAccounts, categories, budgets, bills });
+        } catch (e) {
+            console.error('Failed to load editor metadata', e);
+        } finally {
+            setMetadataLoading(false);
+        }
+    }, [editorMetadata, metadataLoading]);
+
+    const handleStartEdit = useCallback((idx: number) => {
+        setEditingTxnIdx(idx);
+        ensureEditorMetadata();
+    }, [ensureEditorMetadata]);
+
+    const handleCancelEdit = useCallback(() => {
+        setEditingTxnIdx(undefined);
+    }, []);
+
+    const handleEditSaved = useCallback((idx: number, updated: TransactionRead) => {
+        setTransactions((prev) => prev.map((t, i) => {
+            if (i !== idx || !t.importStatus) return t;
+            // Update the transactions in the matching transactions
+            const newMatching = t.importStatus.matchingTransactions
+                ? t.importStatus.matchingTransactions.map((m) => (m.id === updated.id ? { ...updated, totalMatch: m.totalMatch } : m))
+                : t.importStatus.matchingTransactions;
+            //return the new import status updating the ff3Txn2Import and matchingTransactions with edited set to true
+            return {
+                ...t,
+                importStatus: {
+                    ...t.importStatus,
+                    ff3TxnImported: t.importStatus.ff3TxnImported ? updated : t.importStatus.ff3TxnImported,
+                    matchingTransactions: newMatching,
+                    edited: true,
+                },
+            };
+        }));
+        setEditingTxnIdx(undefined);
+    }, []);
+
+    const handleEditDeleted = useCallback((idx: number) => {
+        setTransactions((prev) => prev.map((t, i) => {
+            if (i !== idx || !t.importStatus) return t;
+            return {
+                ...t,
+                importStatus: {
+                    ...t.importStatus,
+                    status: 'failure',
+                    statusMessage: 'Deleted from FireFly III by you',
+                    ff3TxnImported: undefined,
+                    matchingTransactions: undefined,
+                    edited: false,
+                },
+            };
+        }));
+        setEditingTxnIdx(undefined);
     }, []);
 
     const processTransactions = useCallback(async () => {
@@ -490,7 +571,7 @@ function App() {
                     parsedTxn.importStatus = {
                         status: exactMatchFound ? 'match-exact' : 'match-value',
                         matchingTransactions: matchingTransactions,
-                        ff3Txn: newTxn,
+                        ff3Txn2Import: newTxn,
                     };
                 }
 
@@ -834,10 +915,10 @@ function App() {
                                 </Box>
                             </Stack>
 
-                            <Stack direction="row" justifyContent="flex-end" spacing={1} sx={{ mt: 3 }}>
+                            <Box sx={{ display: 'flex', flexDirection: 'row', justifyContent: 'flex-end', gap: 1, mt: 3 }}>
                                 <Button variant="outlined" color="secondary" onClick={() => { window.location.reload(); }}>Cancel</Button>
                                 <Button variant="contained" color="success" onClick={() => { createAccount(newAccountData); }}>Add Account</Button>
-                            </Stack>
+                            </Box>
                         </CardContent>
                     </Card>
                 </Collapse>
@@ -877,7 +958,21 @@ function App() {
                                     </TableHead>
                                     <TableBody>
                                         {transactions.map((transaction, idx) => (
-                                            <OfxTransactionsRow transaction={transaction} index={idx} importTransaction={addAnyways} />
+                                            <OfxTransactionsRow
+                                                key={`ofxRow_${idx}`}
+                                                transaction={transaction}
+                                                index={idx}
+                                                importTransaction={addAnyways}
+                                                isEditing={editingTxnIdx === idx}
+                                                onStartEdit={handleStartEdit}
+                                                onSaved={handleEditSaved}
+                                                onDeleted={handleEditDeleted}
+                                                onCancelEdit={handleCancelEdit}
+                                                accounts={editorMetadata?.accounts}
+                                                categories={editorMetadata?.categories}
+                                                budgets={editorMetadata?.budgets}
+                                                bills={editorMetadata?.bills}
+                                            />
                                         ))}
                                     </TableBody>
                                 </Table>
