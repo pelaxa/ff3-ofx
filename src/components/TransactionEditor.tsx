@@ -30,6 +30,7 @@ interface TransactionEditorProps {
     categories: CategoryRead[];
     budgets: BudgetRead[];
     bills: BillRead[];
+    tags: string[];
     onSaved: (updated: TransactionRead) => void;
     onDeleted: () => void;
     onCancel: () => void;
@@ -350,7 +351,7 @@ const TransactionEditor = (props: TransactionEditorProps) => {
                             sx={fieldFull}
                             multiple
                             freeSolo
-                            options={[] as string[]}
+                            options={props.tags}
                             value={s.tags}
                             onChange={(_, v) => updateSplit(idx, { tags: v })}
                             renderInput={(params) => <TextField {...params} label='Tags' variant='outlined' placeholder='Type and press enter' />}

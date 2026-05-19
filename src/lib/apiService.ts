@@ -6,6 +6,7 @@ import {
     BillsService,
     BudgetsService,
     CategoriesService,
+    TagsService,
     TransactionsService,
     AccountRoleProperty,
     CreditCardTypeProperty,
@@ -15,6 +16,7 @@ import {
     type BillRead,
     type BudgetRead,
     type CategoryRead,
+    type TagRead,
     type TransactionRead,
     type TransactionStoreWritable,
     type TransactionUpdateWritable,
@@ -360,6 +362,23 @@ const listBudgets = async (): Promise<BudgetRead[]> => {
     return out;
 };
 
+const listTags = async (): Promise<string[]> => {
+    const c = getClient();
+    if (!c) return [];
+    const out: string[] = [];
+    for await (const item of pageThroughGeneric<TagRead>(
+        (page) => TagsService.listTag({
+            client: c,
+            throwOnError: false,
+            query: { limit: PAGE_SIZE, page },
+        }),
+        'GET /tags',
+    )) {
+        if (item.attributes.tag) out.push(item.attributes.tag);
+    }
+    return out;
+};
+
 const listBills = async (): Promise<BillRead[]> => {
     const c = getClient();
     if (!c) return [];
@@ -393,6 +412,7 @@ const ApiService = {
     listCategories,
     listBudgets,
     listBills,
+    listTags,
     getLatestVersion,
 };
 

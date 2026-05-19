@@ -5,7 +5,7 @@ import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 import AddIcon from '@mui/icons-material/Add';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import type { AccountRead, BillRead, BudgetRead, CategoryRead, TransactionRead } from '@billos/firefly-iii-sdk';
-import { OfxParsedTransaction } from "@/lib/interfaces";
+import { OfxImportStatus, OfxParsedTransaction } from "@/lib/interfaces";
 import OfxTransactionRow from "./OfxMatchingTransactionsTable";
 import TransactionEditor from "./TransactionEditor";
 import utils from "@/lib/utils";
@@ -26,13 +26,14 @@ interface OfxTransactionsTableProps {
     categories?: CategoryRead[];
     budgets?: BudgetRead[];
     bills?: BillRead[];
+    tags?: string[];
 }
 
 const getEditableFireflyTxn = (t: OfxParsedTransaction): TransactionRead | undefined => {
     const s = t.importStatus;
     if (!s) return undefined;
     if (s.ff3TxnImported) return s.ff3TxnImported;
-    if ((s.status === 'match-exact' || s.status === 'match-value')
+    if ((s.status === OfxImportStatus.MATCH_EXACT || s.status === OfxImportStatus.MATCH_VALUE)
         && s.matchingTransactions
         && s.matchingTransactions.length === 1) {
         return s.matchingTransactions[0];
@@ -46,29 +47,32 @@ const OfxTransactionsRow = (props: OfxTransactionsTableProps) => {
     const editable = getEditableFireflyTxn(props.transaction);
     const edited = props.transaction.importStatus?.edited === true;
 
-    const getStatus = (status: "success" | "failure" | "match-exact" | "match-value" | undefined) => {
+    const getStatus = (status: NonNullable<OfxParsedTransaction['importStatus']>['status'] | undefined) => {
         let jsx = <Chip label="✕ failed" variant="outlined"
                       sx={{ color: '#ef9a9a', borderColor: 'rgba(239,83,80,.3)', backgroundColor: 'rgba(239,83,80,.15)' }} />;
         switch (status) {
-            case 'match-exact':
+            case OfxImportStatus.MATCH_EXACT:
                 jsx = <Chip label="= exact match" variant="outlined"
                           sx={{ color: '#42a5f5', borderColor: 'rgba(66,165,245,.3)', backgroundColor: 'rgba(66,165,245,.15)' }} />;
                 break;
-            case 'match-value':
+            case OfxImportStatus.MATCH_VALUE:
                 jsx = <Chip label="$ amount match" variant="outlined"
                           sx={{ color: '#ce93d8', borderColor: 'rgba(171,71,188,.3)', backgroundColor: 'rgba(171,71,188,.15)' }}
                           deleteIcon={open ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
                           onDelete={() => setOpen(!open)}/>;
                 break;
-            case 'success':
+            case OfxImportStatus.SUCCESS:
                 jsx = <Chip label="✓ added" variant="outlined"
                           sx={{ color: '#66bb6a', borderColor: 'rgba(102,187,106,.3)', backgroundColor: 'rgba(102,187,106,.15)' }} />;
                 break;
+            case OfxImportStatus.DELETED:
+                jsx = <Chip label="✕ deleted" variant="outlined"
+                      sx={{ color: 'rgb(239,83,80)', borderColor: 'rgba(239,83,80,.3)', backgroundColor: 'rgba(153,0,0,.15)' }} />;
         }
         return jsx;
     }
 
-    const canAddAnyway = !['match-exact', 'success'].includes(props.transaction.importStatus?.status || '');
+    const canAddAnyway = props.transaction.importStatus?.status && ![OfxImportStatus.MATCH_EXACT, OfxImportStatus.SUCCESS].includes(props.transaction.importStatus?.status);
 
     return (
         <Fragment key={`ofxTxn_${props.index}_root`}>
@@ -87,12 +91,9 @@ const OfxTransactionsRow = (props: OfxTransactionsTableProps) => {
                         {getStatus(props.transaction.importStatus?.status)}
                         {edited && (
                             <Chip
-                                size="small"
                                 label="✎ edited"
                                 variant="outlined"
                                 sx={{
-                                    fontSize: '10px',
-                                    height: '20px',
                                     color: 'primary.light',
                                     borderColor: 'rgba(144,202,249,.3)',
                                     backgroundColor: 'rgba(144,202,249,.12)',
@@ -130,7 +131,7 @@ const OfxTransactionsRow = (props: OfxTransactionsTableProps) => {
                                     fontSize: '12px',
                                     '&:hover': { borderColor: 'primary.light', color: 'primary.light' },
                                 }}>
-                                <AddIcon sx={{ fontSize: '14px', mr: 0.5 }} /> Add anyways
+                                <AddIcon sx={{ fontSize: '14px', mr: 0.5 }} /> {props.transaction.importStatus?.status === OfxImportStatus.DELETED ? 'Add again' : 'Add anyways'}
                             </Button>
                         )}
                     </span>
@@ -145,6 +146,7 @@ const OfxTransactionsRow = (props: OfxTransactionsTableProps) => {
                             categories={props.categories ?? []}
                             budgets={props.budgets ?? []}
                             bills={props.bills ?? []}
+                            tags={props.tags ?? []}
                             onSaved={(updated) => props.onSaved?.(props.index, updated)}
                             onDeleted={() => props.onDeleted?.(props.index)}
                             onCancel={() => props.onCancelEdit?.()}
@@ -152,7 +154,7 @@ const OfxTransactionsRow = (props: OfxTransactionsTableProps) => {
                     </TableCell>
                 </TableRow>
             )}
-            {['failure', 'match-value'].includes(props.transaction.importStatus?.status || '') && (
+            {props.transaction.importStatus?.status && [OfxImportStatus.FAILURE, OfxImportStatus.MATCH_VALUE].includes(props.transaction.importStatus?.status) && (
                 <OfxTransactionRow open={open} transaction={props.transaction} />
             )}
         </Fragment>

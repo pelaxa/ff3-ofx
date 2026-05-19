@@ -27,6 +27,14 @@ export enum OfxAccountStatus {
     UNPROCESSED = 'unprocessed',
 }
 
+export enum OfxImportStatus {
+    SUCCESS = 'success',
+    FAILURE = 'failure',
+    MATCH_EXACT = 'match-exact',
+    MATCH_VALUE = 'match-value',
+    DELETED = 'deleted'
+}
+
 export interface OfxAccount {
     accountNumber?: string;
     accountType?: string;
@@ -57,7 +65,7 @@ export interface OfxParsedTransaction {
     description: string;
     memo: string;
     importStatus?: {
-        status: 'success' | 'failure' | 'match-exact' | 'match-value';
+        status: OfxImportStatus;
         statusMessage?: string;
         statusError?: { [key: string]: string[] | undefined };
         matchingTransactions?: MatchedTransaction[];
