@@ -11,6 +11,7 @@ import {
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutlined';
 import AddIcon from '@mui/icons-material/Add';
 import {
+    TransactionSplit,
     TransactionTypeProperty,
     type AccountRead,
     type BillRead,
@@ -58,7 +59,7 @@ const txnTypeOptions: TransactionTypeProperty[] = [
 const fromSplit = (s: TransactionRead['attributes']['transactions'][number]): SplitFormState => ({
     journalId: s.transaction_journal_id,
     description: s.description ?? '',
-    amount: s.amount ?? '',
+    amount: Number(s.amount ?? '').toFixed(s.currency_decimal_places),
     sourceName: s.source_name ?? '',
     destinationName: s.destination_name ?? '',
     categoryName: s.category_name ?? '',
@@ -68,11 +69,11 @@ const fromSplit = (s: TransactionRead['attributes']['transactions'][number]): Sp
     tags: s.tags ?? [],
 });
 
-const emptySplit = (): SplitFormState => ({
+const emptySplit = (s: SplitFormState): SplitFormState => ({
     description: '',
     amount: '0.00',
-    sourceName: '',
-    destinationName: '',
+    sourceName: s.sourceName ?? '',
+    destinationName: s.destinationName ?? '',
     categoryName: '',
     budgetName: '',
     billName: '',
@@ -99,6 +100,8 @@ const TransactionEditor = (props: TransactionEditorProps) => {
     const initialSplits = props.transaction.attributes.transactions;
     const initialType = (initialSplits[0]?.type ?? TransactionTypeProperty.WITHDRAWAL) as TransactionTypeProperty;
     const initialDate = (initialSplits[0]?.date ?? '').slice(0, 10);
+    const initialAmount = initialSplits.reduce((runningSum: number, txn: TransactionSplit) => { runningSum += Number(txn.amount); return runningSum}, 0 );
+    const initialDecimalPlaces = (initialSplits[0]?.currency_decimal_places ?? 2);
 
     const [txnType, setTxnType] = useState<TransactionTypeProperty>(initialType);
     const [origTxnType] = useState<TransactionTypeProperty>(initialType);
@@ -138,8 +141,8 @@ const TransactionEditor = (props: TransactionEditorProps) => {
     const budgetOptions = useMemo(() => props.budgets.map((b) => b.attributes.name), [props.budgets]);
     const billOptions = useMemo(() => props.bills.map((b) => b.attributes.name).filter(Boolean) as string[], [props.bills]);
 
-    const updateSplit = (idx: number, patch: Partial<SplitFormState>) => {
-        setSplits((prev) => prev.map((s, i) => (i === idx ? { ...s, ...patch } : s)));
+    const updateSplit = (idx: number, patch: Partial<SplitFormState>, formatAmount: boolean = false) => {
+        setSplits((prev) => prev.map((s, i) => (i === idx ? { ...s, ...patch, ...(formatAmount ? { amount: Number(patch.amount ?? s.amount).toFixed(initialDecimalPlaces) } : undefined) } : s)));
     };
 
     const splitsSum = useMemo(
@@ -313,17 +316,18 @@ const TransactionEditor = (props: TransactionEditorProps) => {
                         <TextField
                             label='Amount'
                             variant='outlined'
-                            value={Number(s.amount).toFixed(2)}
+                            value={s.amount}
                             onChange={(e) => {
                                 // clear helper when input matches pattern
-                                const re = new RegExp(DECIMAL_PATTERN);
+                                const re = new RegExp(`^-?\\d+(\\.(\\d{1,${initialDecimalPlaces}})?)?$`);
                                 if (e.target.value === "" || re.test(e.target.value)) {
+                                    updateSplit(idx, { amount: e.target.value })
                                     setAmountHelper('');
                                 } else {
                                     setAmountHelper('Enter a valid amount (up to 2 decimal places)');
                                 }
-                                updateSplit(idx, { amount: e.target.value });
                             }}
+                            onBlur={(e) => updateSplit(idx, { amount: e.target.value }, true) }
                             error={!!amountHelper}
                             helperText={amountHelper}
                             slotProps={{ htmlInput: {inputMode: 'decimal' } }}
@@ -396,14 +400,14 @@ const TransactionEditor = (props: TransactionEditorProps) => {
                             },
                         }}
                         startIcon={<AddIcon />}
-                        onClick={() => setSplits((prev) => [...prev, emptySplit()])}
+                        onClick={() => setSplits((prev) => [...prev, emptySplit(prev[0])])}
                     >
                         Add another split
                     </Button>
 
                     {isSplit && (
                         <Box sx={{ ...fieldFull, display: 'flex', justifyContent: 'flex-end', gap: 2, fontSize: '12px', color: 'text.secondary', pt: '4px' }}>
-                            <span>Splits sum: <strong style={{ color: tokens.textPrimary }}>{splitsSum.toFixed(2)}</strong></span>
+                            <span>Splits sum: <strong style={{ color: (splitsSum === initialAmount ? tokens.success : tokens.error) }}>{splitsSum.toFixed(initialDecimalPlaces)} / {initialAmount.toFixed(initialDecimalPlaces)} </strong></span>
                         </Box>
                     )}
                 </>

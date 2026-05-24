@@ -217,25 +217,22 @@ function App() {
         }
     },[accounts, ofxAccountIndex, ofxData]);
 
+    const resetState = useCallback(() => {
+        setMatchingAccounts(undefined);
+        setSelectedAccount(undefined);
+        setTransactions([]);
+        setProgress(0);
+    },[]);
+
     const handleImportAnother = useCallback(() => {
-        if (matchingAccounts) setMatchingAccounts(undefined);
-        if (selectedAccount) setSelectedAccount(undefined);
-        if (transactions && transactions.length > 0) setTransactions([]);
-        if (progress !== 0) setProgress(0);
+        resetState();
         setOfxData(undefined);
         setProcessed(false);
         setShowFileDrop(true);
         setErrorMessage(undefined);
         setNewAccountData(undefined);
-    }, [matchingAccounts, progress, selectedAccount, transactions]);
-
-    const resetState = useCallback(() => {
-        if (matchingAccounts) setMatchingAccounts(undefined);
-        if (selectedAccount) setSelectedAccount(undefined);
-        if (transactions && transactions.length > 0) setTransactions([]);
-        // setTxnIdx(0);
-        if (progress !== 0) setProgress(0);
-    },[matchingAccounts, progress, selectedAccount, transactions]);
+        setOfxAccountIndex(0);
+    }, [resetState]);
 
     const showFile = useCallback((files: File[]) => {
         console.log('showFile files[0].name', files[0]);
@@ -247,10 +244,10 @@ function App() {
             return;
         } else if (files.length === 1) {
             // Reset our state before reading the new file
-            if (ofxData) setOfxData(undefined);
+            setOfxData(undefined);
             // in case our OFX account index is higher than 0 (i.e. we just processed a multi-account ofx), then
             // set it back to zero in case the new file does not have multiple accounts;
-            if (ofxAccountIndex > 0) setOfxAccountIndex(0);
+            setOfxAccountIndex(0);
             resetState();
 
             // console.log('parsing ofx with new lib...');
@@ -1011,7 +1008,6 @@ function App() {
                             }}>
                                 <Box>
                                     <Typography variant="subtitle2">Import another file?</Typography>
-                                    <Typography variant="body2" sx={{ color: 'text.secondary', mt: '4px' }}>Drop a new OFX or QFX file to start a fresh import.</Typography>
                                 </Box>
                                 <Button variant="outlined" startIcon={<RefreshIcon />} onClick={handleImportAnother} sx={{ flexShrink: 0 }}>
                                     Import another file

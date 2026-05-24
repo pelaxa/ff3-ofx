@@ -108,7 +108,7 @@ const OfxTransactionsRow = (props: OfxTransactionsTableProps) => {
                             <Button
                                 variant="outlined"
                                 size="small"
-                                onClick={() => props.onStartEdit?.(props.index)}
+                                onClick={() => props.isEditing ? props.onCancelEdit?.() : props.onStartEdit?.(props.index)}
                                 sx={{
                                     borderColor: 'divider',
                                     color: props.isEditing ? 'primary.light' : 'text.secondary',
