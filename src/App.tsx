@@ -100,11 +100,11 @@ function App() {
      * Fetch the list of accounts
      */
     const init = useCallback(async (currentToken?: Token) => {
-        console.warn('fetching accounts: ', currentToken);
+        console.debug('fetching accounts...');
         ApiService.getAccounts(currentToken?.value).then(accntResponse => {
-            // TODO: Fix response when token has expired.
             console.log('accntResponse', accntResponse);
             if (accntResponse && accntResponse.length >= 0) {
+                setErrorMessage(undefined);
                 setAccounts(accntResponse);
                 // If we got accounts back, then store the token
                 if (currentToken && currentToken.value) {
@@ -825,7 +825,7 @@ function App() {
                             <Typography variant='subtitle2' sx={{ mb: 2, textTransform: 'uppercase', letterSpacing: '0.8px', color: 'primary.light' }}>
                                 Import OFX / QFX File
                             </Typography>
-                            <FileDrop errorMessage={errorMessage} fileLimit={1} onChange={showFile} />
+                            <FileDrop fileLimit={1} onChange={showFile} />
                         </CardContent>
                     </Card>
                 </Collapse>
