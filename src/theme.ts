@@ -139,7 +139,7 @@ export const theme = createTheme({
     // ── Alerts ────────────────────────────────────────────────────────────────
     MuiAlert: {
       styleOverrides: {
-        outlinedInfo: {
+        outlined: {
           borderLeft:      `4px solid ${tokens.blue}`,
           borderRight:     'none',
           borderTop:       'none',

@@ -93,9 +93,6 @@ const splitCardSx = {
     gap: '12px 18px',
 };
 
-// TODO: Update this to dynamically handle decimal places based on user preferences.
-const DECIMAL_PATTERN = '^-?\\d+(\\.(\\d{1,2})?)?$';
-
 const TransactionEditor = (props: TransactionEditorProps) => {
     const initialSplits = props.transaction.attributes.transactions;
     const initialType = (initialSplits[0]?.type ?? TransactionTypeProperty.WITHDRAWAL) as TransactionTypeProperty;

@@ -71,7 +71,7 @@ const Summary = (props: SummaryProps) => {
 
 
     return (
-        <Box sx={{ width: 960 }} pb={2}>
+        <Box sx={{ width: 960, pb: 2 }}>
             {props.bankBalance !== accountBalance && (
                 <Alert severity="warning" sx={{ mb: 1 }}>
                     The bank balance does not match your account balance. Look for transactions that may
@@ -86,10 +86,10 @@ const Summary = (props: SummaryProps) => {
                         {account?.attributes.account_number}
                     </Typography>
 
-                    <Stack direction="row" alignItems="center" spacing={2}>
+                    <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
                         {/* Bank balance */}
                         <Box sx={balanceCardSx}>
-                            <Stack direction="row" alignItems="center" justifyContent="center" spacing={0.5} mb={0.5}>
+                            <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', justifyContent: 'center', mb: 0.5 }}>
                                 <AccountBalanceIcon fontSize="small" sx={{ color: 'text.secondary' }} />
                                 <Typography variant="overline" sx={{ color: 'text.secondary', lineHeight: 1 }}>Bank Balance</Typography>
                             </Stack>
@@ -122,7 +122,7 @@ const Summary = (props: SummaryProps) => {
 
                         {/* Firefly balance */}
                         <Box sx={balanceCardSx}>
-                            <Stack direction="row" alignItems="center" justifyContent="center" spacing={0.5} mb={0.5}>
+                            <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', justifyContent: 'center', mb: 0.5 }}>
                                 <SavingsIcon fontSize="small" sx={{ color: 'text.secondary' }} />
                                 <Typography variant="overline" sx={{ color: 'text.secondary', lineHeight: 1 }}>Firefly Balance</Typography>
                             </Stack>

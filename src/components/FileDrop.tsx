@@ -30,7 +30,7 @@ const FileDrop = (props: FileDropProps) => {
     return (
         <>
             {props.text && (<p>{props.text}</p>)}
-            <Box component="section" maxWidth={400}>
+            <Box component="section" sx={{ maxWidth: 400 }}>
                 {!showError && (
                     <DropzoneArea dropzoneClass="drop_zone" filesLimit={props.fileLimit} showPreviews={false} showPreviewsInDropzone={true} useChipsForPreview={true} 
                         showAlerts={false} dropzoneText={''} onDropRejected={props.onDropRejected} onChange={onChange} />

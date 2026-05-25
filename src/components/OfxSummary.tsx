@@ -15,13 +15,13 @@ interface OfxSummaryProps {
 
 const OfxSummary = (props: OfxSummaryProps) => {
     return (
-        <Box sx={{ width: 1000 }} pb={2}>
+        <Box sx={{ width: 1000, pb: 2 }}>
             <Card variant="outlined">
                 <CardContent>
-                    <Typography variant="h6" gutterBottom component="div" textAlign={'left'}>
+                    <Typography variant="h6" gutterBottom component="div" sx={{ textAlign: 'left' }}>
                         Multiple accounts detected.  Once processing has finished for the current account, select the next account to be processed.
                     </Typography>
-                    <Stack direction="row" spacing={2} justifyContent={'center'}>
+                    <Stack direction="row" spacing={2} sx={{ justifyContent: 'center' }}>
                         {props.accounts.map((account, idx) => {
                             const icon = account.status === OfxAccountStatus.PROCESSED ? <CheckCircleIcon color="success"/> : account.status === OfxAccountStatus.PROCESSING ? <CircularProgress size="20px" /> : <HourglassEmptyIcon color="action" />
                             return <Chip key={`account_chip_${idx}`} icon={icon} variant="outlined" label={account.accountNumber} onClick={() => props.clickHandler(idx)} disabled={!(props.selectionAllowed && account.status === OfxAccountStatus.UNPROCESSED)}/>

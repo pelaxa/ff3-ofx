@@ -86,7 +86,7 @@ const buildRequestError = (
     } else {
         detail = 'no response body';
     }
-    return new Error(`${status}: ${detail}`);
+    return new Error(`${endpoint} ${status}: ${detail}`);
 };
 
 async function* pageThroughAccounts(

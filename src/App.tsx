@@ -287,7 +287,7 @@ function App() {
             // start reading the new file (This will trigger the onload event above)
             reader.readAsText(files[0]);
         }
-    }, [ofxData, ofxAccountIndex, resetState, processAccount]);
+    }, [resetState, processAccount]);
 
     const selectAccount = async (accnt: AccountRead) => {
         setProcessed(false);
