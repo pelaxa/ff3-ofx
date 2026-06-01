@@ -483,6 +483,8 @@ function App() {
     const handleEditDeleted = useCallback((idx: number) => {
         setTransactions((prev) => prev.map((t, i) => {
             if (i !== idx || !t.importStatus) return t;
+            // Update the progress to make sure summary is also updated
+            setProgress(progress +1);
             return {
                 ...t,
                 importStatus: {
@@ -997,9 +999,9 @@ function App() {
                     <>
                         <Summary bankBalance={bankBalance} accountId={selectedAccount?.id} processed={processed} progress={progress} />
                         {processed && (
-                            <Box sx={{
+                            <Box className="scrollView" sx={{
                                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                                width: 960, mb: 1, p: '20px 24px',
+                                mb: 1, p: '20px 24px',
                                 backgroundColor: 'background.default',
                                 border: '1px solid',
                                 borderColor: 'divider',
@@ -1014,8 +1016,8 @@ function App() {
                                 </Button>
                             </Box>
                         )}
-                        <div className="scrollview" >
-                            <TableContainer component={Paper} sx={{ maxHeight: '70vh' }}>
+                        <div className="scrollView" >
+                            <TableContainer component={Paper}>
                                 <Table stickyHeader aria-label="collapsible sticky table">
                                     <TableHead>
                                         <TableRow className="Header-Row">

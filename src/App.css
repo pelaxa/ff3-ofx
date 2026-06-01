@@ -31,8 +31,10 @@
   min-height: 100%  !important;
 }
 
-.scrollview {
-  width: 960px;
+.scrollView {
+  min-width: 960px;
+  width: 70vw;
+  max-width: 1200px;
 }
 
 .matching-txns th,

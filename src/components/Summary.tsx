@@ -71,7 +71,7 @@ const Summary = (props: SummaryProps) => {
 
 
     return (
-        <Box sx={{ width: 960, pb: 2 }}>
+        <Box className="scrollView" sx={{ pb: 2 }}>
             {props.bankBalance !== accountBalance && (
                 <Alert severity="warning" sx={{ mb: 1 }}>
                     The bank balance does not match your account balance. Look for transactions that may
