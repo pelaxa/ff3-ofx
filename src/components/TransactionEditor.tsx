@@ -337,6 +337,16 @@ const TransactionEditor = (props: TransactionEditorProps) => {
                             renderInput={(params) => <TextField {...params} label='Category' variant='outlined' />}
                         />
 
+                        <Autocomplete
+                            sx={fieldFull}
+                            multiple
+                            freeSolo
+                            options={props.tags}
+                            value={s.tags}
+                            onChange={(_, v) => updateSplit(idx, { tags: v })}
+                            renderInput={(params) => <TextField {...params} label='Tags' variant='outlined' placeholder='Type and press enter' />}
+                        />
+
                         <TextField
                             sx={fieldFull}
                             label='Notes'
@@ -346,16 +356,6 @@ const TransactionEditor = (props: TransactionEditorProps) => {
                             multiline
                             minRows={1}
                             maxRows={3}
-                        />
-
-                        <Autocomplete
-                            sx={fieldFull}
-                            multiple
-                            freeSolo
-                            options={props.tags}
-                            value={s.tags}
-                            onChange={(_, v) => updateSplit(idx, { tags: v })}
-                            renderInput={(params) => <TextField {...params} label='Tags' variant='outlined' placeholder='Type and press enter' />}
                         />
 
                         {txnType === TransactionTypeProperty.WITHDRAWAL && (
