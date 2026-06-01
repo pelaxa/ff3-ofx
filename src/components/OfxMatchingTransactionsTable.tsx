@@ -29,7 +29,7 @@ const OfxMatchingTransactionsTable = (props: OfxTransactionRowProps) => {
                                 <TableRow key={'match_header'}>
                                     <TableCell colSpan={4} sx={{textAlign: 'center', border: 0}}>Matching Transactions</TableCell>
                                 </TableRow>
-                                <TableRow key={'match_header'}>
+                                <TableRow key={'match_row'}>
                                     <TableCell>Description</TableCell>
                                     <TableCell align="center">Date</TableCell>
                                     <TableCell align="right">
