@@ -1,5 +1,5 @@
-import { Fragment, useState } from "react";
-import { Button, Chip, TableCell, TableRow } from "@mui/material";
+import { Fragment, useCallback, useState } from "react";
+import { Alert, Button, Chip, CircularProgress, TableCell, TableRow } from "@mui/material";
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 import AddIcon from '@mui/icons-material/Add';
@@ -33,9 +33,8 @@ const getEditableFireflyTxn = (t: OfxParsedTransaction): TransactionRead | undef
     const s = t.importStatus;
     if (!s) return undefined;
     if (s.ff3TxnImported) return s.ff3TxnImported;
-    if ((s.status === OfxImportStatus.MATCH_EXACT || s.status === OfxImportStatus.MATCH_VALUE)
-        && s.matchingTransactions
-        && s.matchingTransactions.length === 1) {
+    if (s.matchingTransactions && (s.status === OfxImportStatus.MATCH_EXACT || (s.status === OfxImportStatus.MATCH_VALUE
+        && s.matchingTransactions.length === 1))) {
         return s.matchingTransactions[0];
     }
     return undefined;
@@ -46,7 +45,22 @@ const OfxTransactionsRow = (props: OfxTransactionsTableProps) => {
     const [open, setOpen] = useState<boolean>(false);
     const editable = getEditableFireflyTxn(props.transaction);
     const edited = props.transaction.importStatus?.edited === true;
-
+    const [saving, setSaving] = useState(false);
+    const [error, setError] = useState<string | undefined>();
+    
+    // TODO: make this a callback
+    const handleSave = useCallback(async () => {
+        setError(undefined);
+        setSaving(true);
+        try {
+            props.importTransaction(props.transaction)
+        } catch (e) {
+            setError((e as Error).message);
+        } finally {
+            setSaving(false);
+        }
+    }, [props]);
+    
     const getStatus = (status: NonNullable<OfxParsedTransaction['importStatus']>['status'] | undefined) => {
         let jsx = <Chip label="✕ failed" variant="outlined"
                       sx={{ color: '#ef9a9a', borderColor: 'rgba(239,83,80,.3)', backgroundColor: 'rgba(239,83,80,.15)' }} />;
@@ -124,19 +138,28 @@ const OfxTransactionsRow = (props: OfxTransactionsTableProps) => {
                             <Button
                                 variant="outlined"
                                 size="small"
-                                onClick={() => props.importTransaction(props.transaction)}
+                                onClick={handleSave}
+                                disabled={saving}
                                 sx={{
                                     borderColor: 'divider',
                                     color: 'text.secondary',
                                     fontSize: '12px',
                                     '&:hover': { borderColor: 'primary.light', color: 'primary.light' },
                                 }}>
-                                <AddIcon sx={{ fontSize: '14px', mr: 0.5 }} /> {props.transaction.importStatus?.status === OfxImportStatus.DELETED ? 'Add again' : 'Add anyways'}
+                                {saving ? <CircularProgress size={14} sx={{ mr: 1 }} /> : <AddIcon sx={{ fontSize: '14px', mr: 0.5 }} />}
+                                {props.transaction.importStatus?.status === OfxImportStatus.DELETED ? 'Add again' : 'Add anyways'}
                             </Button>
                         )}
                     </span>
                 </TableCell>
             </TableRow>
+            {error && (
+                <TableRow>
+                    <TableCell colSpan={5}>
+                        <Alert severity='error'>{error}</Alert>
+                    </TableCell>
+                </TableRow>
+            )}
             {props.isEditing && editable && props.onSaved && props.onDeleted && props.onCancelEdit && (
                 <TableRow>
                     <TableCell colSpan={5} sx={{ p: 0, borderBottom: '1px solid', borderColor: 'divider' }}>
