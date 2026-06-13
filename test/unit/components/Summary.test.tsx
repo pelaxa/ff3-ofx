@@ -52,4 +52,22 @@ describe('Summary', () => {
         render(<Summary bankBalance={500} accountId="7" processed={true} progress={100} />);
         await waitFor(() => expect(screen.getByText(/Difference/i)).toBeInTheDocument());
     });
+
+    it('adjusts balances for a credit-card account with a virtual balance', async () => {
+        (ApiService.getAccount as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+            mkAccount({ account_role: AccountRoleProperty.CC_ASSET, virtual_balance: '-1000.00', current_balance: '-250.00' }),
+        );
+        render(<Summary bankBalance={300} accountId="7" processed={true} progress={100} />);
+        await waitFor(() => expect(screen.getByText(/Checking/)).toBeInTheDocument());
+        // CC branch ran without throwing and rendered a difference.
+        expect(screen.getByText(/Difference/i)).toBeInTheDocument();
+    });
+
+    it('falls back to 0 when balances and accountId are missing', async () => {
+        (ApiService.getAccount as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+            mkAccount({ current_balance: undefined, virtual_balance: undefined }),
+        );
+        render(<Summary bankBalance={0} processed={true} progress={0} />);
+        await waitFor(() => expect(ApiService.getAccount).toHaveBeenCalledWith('0'));
+    });
 });

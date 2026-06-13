@@ -7,7 +7,13 @@ import { OfxImportStatus, OfxParsedTransaction } from '@/lib/interfaces';
 import type { TransactionRead } from '@billos/firefly-iii-sdk';
 
 vi.mock('@/components/TransactionEditor', () => ({
-    default: () => <div data-testid="editor-stub" />,
+    default: (props: { onSaved: (u: unknown) => void; onDeleted: () => void; onCancel: () => void }) => (
+        <div data-testid="editor-stub">
+            <button data-testid="editor-save" onClick={() => props.onSaved({ id: 'updated' })} />
+            <button data-testid="editor-delete" onClick={() => props.onDeleted()} />
+            <button data-testid="editor-cancel" onClick={() => props.onCancel()} />
+        </div>
+    ),
 }));
 
 const baseTxn = (status?: OfxImportStatus, opts: Partial<OfxParsedTransaction> = {}): OfxParsedTransaction => ({
@@ -109,6 +115,24 @@ describe('OfxTransactionsRow', () => {
         expect(screen.getByText('Editing…')).toBeInTheDocument();
     });
 
+    it('forwards editor save / delete / cancel callbacks with the row index', () => {
+        const onSaved = vi.fn();
+        const onDeleted = vi.fn();
+        const onCancelEdit = vi.fn();
+        const ff3TxnImported = { id: '999', attributes: { transactions: [] } } as unknown as TransactionRead;
+        const t = baseTxn(OfxImportStatus.SUCCESS, { importStatus: { status: OfxImportStatus.SUCCESS, ff3TxnImported } } as Partial<OfxParsedTransaction>);
+        render(wrap(
+            <OfxTransactionsRow transaction={t} index={4} importTransaction={vi.fn()} isEditing={true}
+                onStartEdit={vi.fn()} onSaved={onSaved} onDeleted={onDeleted} onCancelEdit={onCancelEdit} />,
+        ));
+        fireEvent.click(screen.getByTestId('editor-save'));
+        expect(onSaved).toHaveBeenCalledWith(4, { id: 'updated' });
+        fireEvent.click(screen.getByTestId('editor-delete'));
+        expect(onDeleted).toHaveBeenCalledWith(4);
+        fireEvent.click(screen.getByTestId('editor-cancel'));
+        expect(onCancelEdit).toHaveBeenCalled();
+    });
+
     it('shows an "edited" badge when importStatus.edited is true', () => {
         const ff3TxnImported = { id: '999', attributes: { transactions: [] } } as unknown as TransactionRead;
         const t = baseTxn(OfxImportStatus.SUCCESS, {
@@ -116,5 +140,39 @@ describe('OfxTransactionsRow', () => {
         } as Partial<OfxParsedTransaction>);
         render(wrap(<OfxTransactionsRow transaction={t} index={0} importTransaction={vi.fn()} onStartEdit={vi.fn()} onSaved={vi.fn()} onDeleted={vi.fn()} onCancelEdit={vi.fn()} />));
         expect(screen.getByText('✎ edited')).toBeInTheDocument();
+    });
+
+    it('treats a single matching transaction as editable', () => {
+        const onStartEdit = vi.fn();
+        const matched = { id: '321', attributes: { transactions: [] } } as unknown as TransactionRead;
+        const t = baseTxn(OfxImportStatus.MATCH_EXACT, {
+            importStatus: { status: OfxImportStatus.MATCH_EXACT, matchingTransactions: [matched] },
+        } as Partial<OfxParsedTransaction>);
+        render(wrap(
+            <OfxTransactionsRow transaction={t} index={2} importTransaction={vi.fn()}
+                onStartEdit={onStartEdit} onSaved={vi.fn()} onDeleted={vi.fn()} onCancelEdit={vi.fn()} />,
+        ));
+        fireEvent.click(screen.getByText('Edit'));
+        expect(onStartEdit).toHaveBeenCalledWith(2);
+    });
+
+    it('toggles the matching-transactions detail on the MATCH_VALUE chip', () => {
+        const matched = { id: '5', attributes: { transactions: [] }, totalMatch: false } as unknown as TransactionRead;
+        const t = baseTxn(OfxImportStatus.MATCH_VALUE, {
+            importStatus: { status: OfxImportStatus.MATCH_VALUE, matchingTransactions: [matched] },
+        } as Partial<OfxParsedTransaction>);
+        const { container } = render(wrap(<OfxTransactionsRow transaction={t} index={0} importTransaction={vi.fn()} />));
+        // The chip's delete icon toggles the detail row open/closed.
+        const toggle = container.querySelector('.MuiChip-deleteIcon');
+        expect(toggle).toBeTruthy();
+        fireEvent.click(toggle!);
+    });
+
+    it('captures an error thrown by importTransaction', () => {
+        const onImport = vi.fn(() => { throw new Error('import blew up'); });
+        const t = baseTxn(OfxImportStatus.FAILURE);
+        render(wrap(<OfxTransactionsRow transaction={t} index={0} importTransaction={onImport} />));
+        fireEvent.click(screen.getByText('Add anyways'));
+        expect(screen.getByText('import blew up')).toBeInTheDocument();
     });
 });

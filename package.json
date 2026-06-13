@@ -33,7 +33,7 @@
     "compile": "tsc -b && vite build",
     "dist": "cross-os dist",
     "package": "rm -rf ./dist/* ; yarn compile && yarn dist",
-    "test": "vitest",
+    "test": "vitest run --coverage",
     "lint": "eslint src --ext js,jsx --report-unused-disable-directives --max-warnings 0",
     "clean": "rm -rf ./node_modules"
   },
@@ -68,6 +68,7 @@
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react-swc": "^3.8.0",
+    "@vitest/coverage-v8": "^4.1.8",
     "cross-os": "^1.5.0",
     "eslint": "^9.22.0",
     "eslint-plugin-react-hooks": "^5.2.0",

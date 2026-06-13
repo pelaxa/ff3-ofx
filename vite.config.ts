@@ -42,6 +42,30 @@ export default defineConfig(({command, mode} : ConfigEnv) => {
       globals: true,
       environment: 'jsdom',
       setupFiles: ['./test/unit/setupTests.ts'],
+      coverage: {
+        provider: 'v8',
+        reporter: ['text', 'html', 'clover', 'json-summary'],
+        // Measure every source file (even ones no test imports yet) so an
+        // untested file fails the gate instead of silently being ignored.
+        all: true,
+        include: ['src/**/*.{ts,tsx}'],
+        exclude: [
+          'src/main.tsx',          // app entrypoint, not unit-testable
+          'src/theme.ts',          // static theme tokens
+          'src/lib/interfaces.ts', // type declarations only
+          'src/**/*.d.ts',
+          'src/vite-env.d.ts',
+        ],
+        // Every individual file must clear 75% — a well-covered file can no
+        // longer mask a poorly-covered one in the global average.
+        thresholds: {
+          perFile: true,
+          statements: 75,
+          branches: 75,
+          functions: 75,
+          lines: 75,
+        },
+      },
     },
     // https://dev.to/manojspace/migrating-from-create-react-app-to-vite-a-step-by-step-guide-2cab
     server: {

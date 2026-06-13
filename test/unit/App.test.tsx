@@ -56,6 +56,17 @@ describe('App — login screen', () => {
         expect(login).toBeEnabled();
     });
 
+    it('re-disables the login button when the token field is cleared', async () => {
+        const user = userEvent.setup();
+        render(<App />);
+        const field = await screen.findByLabelText(/Personal Access Token/i);
+        const login = screen.getByRole('button', { name: /^Login$/i });
+        await user.type(field, 'abc');
+        expect(login).toBeEnabled();
+        await user.clear(field);
+        expect(login).toBeDisabled();
+    });
+
     it('calls ApiService.getAccounts when Login is clicked', async () => {
         const user = userEvent.setup();
         render(<App />);
