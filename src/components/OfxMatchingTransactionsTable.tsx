@@ -15,7 +15,7 @@ const OfxMatchingTransactionsTable = (props: OfxTransactionRowProps) => {
 
     return (
         <TableRow>
-            <TableCell style={{ border: 0, paddingBottom: 0, paddingTop: 0 }} colSpan={5}>
+            <TableCell style={{ border: 0, paddingBottom: 0, paddingTop: 0 }} colSpan={6}>
                 <Collapse in={props.open} timeout="auto" unmountOnExit>
                     <Box
                         sx={{

@@ -1029,6 +1029,7 @@ function App() {
                                         <TableRow className="Header-Row">
                                             <TableCell className="Header-Row">Description</TableCell>
                                             <TableCell align="center">Date</TableCell>
+                                            <TableCell align="center">Type</TableCell>
                                             <TableCell align="right">Amount</TableCell>
                                             <TableCell align="center">Status</TableCell>
                                             <TableCell align="center">Action</TableCell>

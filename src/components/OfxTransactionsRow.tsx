@@ -1,10 +1,15 @@
-import { Fragment, useCallback, useState } from "react";
-import { Alert, Button, Chip, CircularProgress, TableCell, TableRow } from "@mui/material";
+import { Fragment, JSX, useCallback, useState } from "react";
+import { Alert, Box, Button, Chip, CircularProgress, Stack, TableCell, TableRow, Tooltip, Typography } from "@mui/material";
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 import AddIcon from '@mui/icons-material/Add';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
-import type { AccountRead, BillRead, BudgetRead, CategoryRead, TransactionRead } from '@billos/firefly-iii-sdk';
+import DepositIcon from '@mui/icons-material/TurnLeftOutlined';
+import WithdrawIcon from '@mui/icons-material/TurnRightOutlined';
+import TransferIcon from '@mui/icons-material/SwapHoriz';
+import CategoryOutlinedIcon from '@mui/icons-material/CategoryOutlined';
+import SellOutlinedIcon from '@mui/icons-material/SellOutlined';
+import { TransactionTypeProperty, type AccountRead, type BillRead, type BudgetRead, type CategoryRead, type TransactionRead } from '@billos/firefly-iii-sdk';
 import { OfxImportStatus, OfxParsedTransaction } from "@/lib/interfaces";
 import OfxTransactionRow from "@/components/OfxMatchingTransactionsTable";
 import TransactionEditor from "@/components/TransactionEditor";
@@ -38,6 +43,33 @@ const getEditableFireflyTxn = (t: OfxParsedTransaction): TransactionRead | undef
         return s.matchingTransactions[0];
     }
     return undefined;
+};
+
+const getTransactionType = (t: TransactionRead | undefined): JSX.Element | undefined => {
+
+    let jsxElement = undefined;
+    switch (t?.attributes.transactions[0].type || '') {
+        case TransactionTypeProperty.WITHDRAWAL:
+            jsxElement = <Tooltip title={TransactionTypeProperty.WITHDRAWAL} arrow placement="top">
+                            <WithdrawIcon color={'error'}/>
+                         </Tooltip>;
+            break;
+        case TransactionTypeProperty.DEPOSIT:
+            jsxElement = <Tooltip title={TransactionTypeProperty.DEPOSIT} arrow placement="top">
+                            <DepositIcon color={'success'} sx={{ transform: 'scaleX(-1) rotate(-90deg)' }}/>
+                         </Tooltip>;
+            break;
+        case TransactionTypeProperty.TRANSFER:
+            jsxElement = <Tooltip title={TransactionTypeProperty.TRANSFER} arrow placement="top">
+                            <TransferIcon />
+                         </Tooltip>;
+            break;
+        default:
+            jsxElement = undefined;
+    }
+
+    return jsxElement;
+    
 };
 
 const OfxTransactionsRow = (props: OfxTransactionsTableProps) => {
@@ -93,9 +125,27 @@ const OfxTransactionsRow = (props: OfxTransactionsTableProps) => {
             <TableRow>
                 <TableCell>
                     {props.transaction.description}
+                    <Stack direction="row" sx={{paddingTop: '4px', alignItems: 'center', color: 'text.secondary'}} spacing={2}>
+                        <Stack direction="row" sx={{alignItems: 'center'}} spacing={1}>
+                            <Tooltip title="category" arrow placement="top">
+                                <CategoryOutlinedIcon fontSize={'small'}/>
+                            </Tooltip>
+                            <Typography sx={{fontSize: '12px'}}>{editable?.attributes.transactions[0].category_name || '<N/A>'}</Typography>
+                        </Stack>
+                        <Typography> </Typography>
+                        <Stack direction="row" sx={{alignItems: 'center'}} spacing={1}>
+                            <Tooltip title="tags" arrow placement="top">
+                                <SellOutlinedIcon fontSize={'small'}/>
+                            </Tooltip>
+                            {editable?.attributes.transactions[0].tags?.map( tag => tag.indexOf('OFX ') !== 0 ? <Chip variant={'outlined'} label={tag} size={'small'} sx={{color: 'text.secondary'}}/> : '')}
+                        </Stack>
+                    </Stack>
                 </TableCell>
                 <TableCell align="center">
                     {props.transaction.datePosted.format('DD-MMM-YYYY')}
+                </TableCell>
+                <TableCell align="center">
+                    {getTransactionType(editable)}
                 </TableCell>
                 <TableCell align="right" sx={{ color: props.transaction.amount >= 0 ? 'success.main' : 'error.main', fontWeight: 500 }}>
                     {utils.getLocaleCurrency(props.transaction.amount)}
@@ -155,14 +205,14 @@ const OfxTransactionsRow = (props: OfxTransactionsTableProps) => {
             </TableRow>
             {error && (
                 <TableRow>
-                    <TableCell colSpan={5}>
+                    <TableCell colSpan={6}>
                         <Alert severity='error'>{error}</Alert>
                     </TableCell>
                 </TableRow>
             )}
             {props.isEditing && editable && props.onSaved && props.onDeleted && props.onCancelEdit && (
                 <TableRow>
-                    <TableCell colSpan={5} sx={{ p: 0, borderBottom: '1px solid', borderColor: 'divider' }}>
+                    <TableCell colSpan={6} sx={{ p: 0, borderBottom: '1px solid', borderColor: 'divider' }}>
                         <TransactionEditor
                             transaction={editable}
                             accounts={props.accounts ?? []}
