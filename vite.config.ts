@@ -35,7 +35,29 @@ export default defineConfig(({command, mode} : ConfigEnv) => {
     ],
     resolve: {
       alias: {
-        '@': path.resolve(__dirname, './src')
+        '@': path.resolve(__dirname, 'src')
+      },
+    },
+    build: {
+      outDir: 'dist',
+      rollupOptions: {
+        input: path.resolve(__dirname, 'src/main.tsx'),
+        output: {
+          // Split large dependencies into their own chunks so no single chunk
+          // exceeds the 500 kB warning limit and the browser can cache vendors
+          // independently of app code.
+          manualChunks(id) {
+            if (!id.includes('node_modules')) return undefined;
+            if (id.includes('@mui/icons-material')) return 'mui-icons';
+            if (id.includes('@mui') || id.includes('@base-ui')) return 'mui';
+            if (id.includes('@emotion')) return 'emotion';
+            if (id.includes('@billos') || id.includes('firefly')) return 'firefly';
+            if (id.includes('moment')) return 'moment';
+            if (id.includes('axios')) return 'axios';
+            if (id.includes('react') || id.includes('scheduler')) return 'react';
+            return 'vendor';
+          },
+        },
       },
     },
     test: {

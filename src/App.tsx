@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import ApiService from './lib/apiService';
-import Utils from './lib/utils';
+import ApiService from '@/lib/apiService';
+import Utils from '@/lib/utils';
 import moment from 'moment';
-import './App.css';
+import '@/App.css';
 import { FF3NewAccount, IntuitBankInfo, MatchedTransaction, OfxAccountStatus, OfxData, OfxImportStatus, OfxParsedTransaction } from '@/lib/interfaces';
 import {
     AccountRoleProperty,
@@ -21,12 +21,11 @@ import CheckIcon from '@mui/icons-material/Check';
 import CloseIcon from '@mui/icons-material/Close';
 import { Alert, AppBar, Box, Card, CardContent, Checkbox, Collapse, FormControl, FormControlLabel, IconButton, InputLabel, MenuItem, Paper, Select, SelectChangeEvent, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Toolbar, Typography } from '@mui/material';
 import * as OFXParser from 'node-ofx-parser';
-import Summary from './components/Summary';
+import Summary from '@/components/Summary';
 import OfxTransactionsRow from '@/components/OfxTransactionsRow';
 import FileDrop from '@/components/FileDrop';
 import BankInfo from '@/lib/bankinfo.json';
-import OfxSummary from './components/OfxSummary';
-// import { Ofx } from 'ofx-data-extractor';
+import OfxSummary from '@/components/OfxSummary';
 
 // Import tag used to identify the import
 const importTag = `OFX Import ${moment().format('YYYY-MM-DD HH:mm:ss')}`;

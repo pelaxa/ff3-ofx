@@ -1,5 +1,5 @@
 import moment, { Moment } from 'moment';
-import { OfxAccount, OfxAccountStatus, OfxData, OfxParsedTransaction, OfxTransaction } from './interfaces';
+import { OfxAccount, OfxAccountStatus, OfxData, OfxParsedTransaction, OfxTransaction } from '@/lib/interfaces';
 
 const DATE_FORMAT = 'YYYYMMDDHHmmss';
 

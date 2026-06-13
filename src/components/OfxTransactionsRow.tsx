@@ -6,8 +6,8 @@ import AddIcon from '@mui/icons-material/Add';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import type { AccountRead, BillRead, BudgetRead, CategoryRead, TransactionRead } from '@billos/firefly-iii-sdk';
 import { OfxImportStatus, OfxParsedTransaction } from "@/lib/interfaces";
-import OfxTransactionRow from "./OfxMatchingTransactionsTable";
-import TransactionEditor from "./TransactionEditor";
+import OfxTransactionRow from "@/components/OfxMatchingTransactionsTable";
+import TransactionEditor from "@/components/TransactionEditor";
 import utils from "@/lib/utils";
 
 

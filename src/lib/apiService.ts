@@ -26,7 +26,7 @@ import {
     NotFoundResponse,
     InternalExceptionResponse,
 } from '@billos/firefly-iii-sdk';
-import { FF3NewAccount } from './interfaces';
+import { FF3NewAccount } from '@/lib/interfaces';
 
 export const BASE_URL = '/api';
 

@@ -22,11 +22,11 @@
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true,
 
-    "baseUrl": "./",
     "paths": {
-      "@/*": ["src/*"]
+      "*": ["./*"],
+      "@/*": ["./src/*"]
     }
   },
-  "include": ["src"],
-  "exclude": ["node_modules", "test"]
+  "include": ["src", "test", "src/**/*.d.ts"],
+  "exclude": ["node_modules", "**/*.spec.ts", "**/*.test.ts"]
 }
