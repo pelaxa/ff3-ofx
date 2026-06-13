@@ -5,13 +5,6 @@ import type {
     TransactionStoreWritable,
 } from '@billos/firefly-iii-sdk';
 
-export interface IntuitBankInfo {
-    id1: string;
-    id2: string;
-    id3: string;
-    name: string;
-}
-
 export interface OfxTransaction {
     TRNTYPE: string;
     DTPOSTED: string;

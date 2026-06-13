@@ -3,7 +3,7 @@ import ApiService from '@/lib/apiService';
 import Utils from '@/lib/utils';
 import moment from 'moment';
 import '@/App.css';
-import { FF3NewAccount, IntuitBankInfo, MatchedTransaction, OfxAccountStatus, OfxData, OfxImportStatus, OfxParsedTransaction } from '@/lib/interfaces';
+import { FF3NewAccount, MatchedTransaction, OfxAccountStatus, OfxData, OfxImportStatus, OfxParsedTransaction } from '@/lib/interfaces';
 import {
     AccountRoleProperty,
     TransactionTypeProperty,
@@ -24,11 +24,25 @@ import * as OFXParser from 'node-ofx-parser';
 import Summary from '@/components/Summary';
 import OfxTransactionsRow from '@/components/OfxTransactionsRow';
 import FileDrop from '@/components/FileDrop';
-import BankInfo from '@/lib/bankinfo.json';
 import OfxSummary from '@/components/OfxSummary';
 
 // Import tag used to identify the import
 const importTag = `OFX Import ${moment().format('YYYY-MM-DD HH:mm:ss')}`;
+
+// bankinfo.json is imported lazily (and cached) so it is never part of the main
+// bundle. It is only needed to map an Intuit id to a friendly bank name when an
+// account has to be matched or created. It is stored as a compact array to keep
+// the file small: each entry is [id1, name].
+type CompactBankInfo = [string, string];
+let bankInfoCache: Map<string, string> | undefined;
+const lookupBankName = async (intuitId?: string): Promise<string> => {
+    if (!intuitId) return '';
+    if (!bankInfoCache) {
+        const entries = (await import('@/lib/bankinfo.json')).default as CompactBankInfo[];
+        bankInfoCache = new Map(entries.map(([id1, name]) => [id1, name]));
+    }
+    return bankInfoCache.get(intuitId) || '';
+};
 
 
 const ERROR_FILE_COUNT_TYPE = 'Please only drop 1 file of type OFX or QFX in this area';
@@ -133,7 +147,7 @@ function App() {
         });
     }, [token]);
 
-    const processAccount = useCallback((accountOfxData?: OfxData) => {
+    const processAccount = useCallback(async (accountOfxData?: OfxData) => {
         if (!accountOfxData && !ofxData) {
             return;
         } else if (!accountOfxData) {
@@ -173,20 +187,13 @@ function App() {
                             setSelectedAccount(partialMatchedAccounts[0]);
                         } else if (partialMatchedAccounts.length > 1) {
                             // Find the bank name
-                            setBankName(
-                                BankInfo.find((info: IntuitBankInfo) => {
-                                    return info.id1 === accountOfxData.intuitId;
-                                }
-                            )?.name || '');
+                            setBankName(await lookupBankName(accountOfxData.intuitId));
                             setMatchingAccounts(partialMatchedAccounts);
                             setErrorMessage(ERROR_MATCH_MULTIPLE_ACCOUNT);
                         }
                     } else {
                         // Let us ask the user if they want to create an account
-                        const bankName = BankInfo.find((info: IntuitBankInfo) => {
-                                    return info.id1 === accountOfxData.intuitId;
-                                }
-                            )?.name || '';
+                        const bankName = await lookupBankName(accountOfxData.intuitId);
                         setBankName(bankName);
                         console.log('accountOfxData.accounts[ofxAccountIndex].accountType?.toLowerCase()', accountOfxData.accounts[ofxAccountIndex].accountType?.toLowerCase());
                         console.log('accountOfxData ROLE', accountOfxData.accounts[ofxAccountIndex].accountType?.toLowerCase() === 'savings' ? AccountRoleProperty.SAVING_ASSET : accountOfxData.accounts[ofxAccountIndex].accountType?.toLowerCase() === 'checking' ? AccountRoleProperty.DEFAULT_ASSET : AccountRoleProperty.CC_ASSET);
