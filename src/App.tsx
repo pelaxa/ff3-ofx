@@ -504,7 +504,7 @@ function App() {
             };
         }));
         setEditingTxnIdx(undefined);
-    }, []);
+    }, [progress]);
 
     const processTransactions = useCallback(async () => {
         // Process each transaction by

@@ -79,7 +79,7 @@ describe('OfxTransactionsRow', () => {
 
     it('shows an Edit button for SUCCESS rows when editing handlers are wired', () => {
         const onStartEdit = vi.fn();
-        const ff3TxnImported = { id: '999', attributes: { transactions: [] } } as unknown as TransactionRead;
+        const ff3TxnImported = { id: '999', attributes: { transactions: [{}] } } as unknown as TransactionRead;
         const t = baseTxn(OfxImportStatus.SUCCESS, { importStatus: { status: OfxImportStatus.SUCCESS, ff3TxnImported } } as Partial<OfxParsedTransaction>);
         render(wrap(
             <OfxTransactionsRow
@@ -97,7 +97,7 @@ describe('OfxTransactionsRow', () => {
     });
 
     it('shows the editor when isEditing=true', () => {
-        const ff3TxnImported = { id: '999', attributes: { transactions: [{ amount: '1', currency_decimal_places: 2 }] } } as unknown as TransactionRead;
+        const ff3TxnImported = { id: '999', attributes: { transactions: [{ amount: '1', currency_decimal_places: 2}] } } as unknown as TransactionRead;
         const t = baseTxn(OfxImportStatus.SUCCESS, { importStatus: { status: OfxImportStatus.SUCCESS, ff3TxnImported } } as Partial<OfxParsedTransaction>);
         render(wrap(
             <OfxTransactionsRow
@@ -119,7 +119,7 @@ describe('OfxTransactionsRow', () => {
         const onSaved = vi.fn();
         const onDeleted = vi.fn();
         const onCancelEdit = vi.fn();
-        const ff3TxnImported = { id: '999', attributes: { transactions: [] } } as unknown as TransactionRead;
+        const ff3TxnImported = { id: '999', attributes: { transactions: [{}] } } as unknown as TransactionRead;
         const t = baseTxn(OfxImportStatus.SUCCESS, { importStatus: { status: OfxImportStatus.SUCCESS, ff3TxnImported } } as Partial<OfxParsedTransaction>);
         render(wrap(
             <OfxTransactionsRow transaction={t} index={4} importTransaction={vi.fn()} isEditing={true}
@@ -134,7 +134,7 @@ describe('OfxTransactionsRow', () => {
     });
 
     it('shows an "edited" badge when importStatus.edited is true', () => {
-        const ff3TxnImported = { id: '999', attributes: { transactions: [] } } as unknown as TransactionRead;
+        const ff3TxnImported = { id: '999', attributes: { transactions: [{}] } } as unknown as TransactionRead;
         const t = baseTxn(OfxImportStatus.SUCCESS, {
             importStatus: { status: OfxImportStatus.SUCCESS, ff3TxnImported, edited: true },
         } as Partial<OfxParsedTransaction>);
@@ -144,7 +144,7 @@ describe('OfxTransactionsRow', () => {
 
     it('treats a single matching transaction as editable', () => {
         const onStartEdit = vi.fn();
-        const matched = { id: '321', attributes: { transactions: [] } } as unknown as TransactionRead;
+        const matched = { id: '321', attributes: { transactions: [{}] } } as unknown as TransactionRead;
         const t = baseTxn(OfxImportStatus.MATCH_EXACT, {
             importStatus: { status: OfxImportStatus.MATCH_EXACT, matchingTransactions: [matched] },
         } as Partial<OfxParsedTransaction>);
@@ -157,7 +157,7 @@ describe('OfxTransactionsRow', () => {
     });
 
     it('toggles the matching-transactions detail on the MATCH_VALUE chip', () => {
-        const matched = { id: '5', attributes: { transactions: [] }, totalMatch: false } as unknown as TransactionRead;
+        const matched = { id: '5', attributes: { transactions: [{}] }, totalMatch: false } as unknown as TransactionRead;
         const t = baseTxn(OfxImportStatus.MATCH_VALUE, {
             importStatus: { status: OfxImportStatus.MATCH_VALUE, matchingTransactions: [matched] },
         } as Partial<OfxParsedTransaction>);
