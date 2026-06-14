@@ -2,14 +2,21 @@
 
 This is a React application that can be used to import transactions using your financial institution's OFX (Money format) exports.  The application runs on client side only and stores the FF3 token (for authentication) in localStorage on your browser. Since it is a client side only application, It expects to be served from the same domain as your FireFlyIII (FF3) instance.  See `Deployment` below for more information.
 
-This is just a quick side project I revamped a little so that others may use it as well, but there are no real maintenance plans as of yet and it has only been tested for my personal use case so far so there may be bugs for certain situations.
+The project has been updated to allow editing the imported transactions.  This was also done for personal reasons since FF3's own editing is always a click to navigate to the transaction page and going back which means you lose context.
+
+## Note on AI Use
+I am using Claude code to assist in coding the project now.  The UI redesign was based on a mockup that Claude provided for example and all the tests have been added by claude.  Feel free to review the code and provide feedback if you see any issues.
+
+## What's next
+I'd like to allow editing all transactions in this tool to avoid the navigation back and forth in FF3.
+Possibly adding quick filters to filter down to account, transaction type, month, etc.
 
 ## How it works
 The application attempts for fetch all of your accounts on startup.  If that fails, you are prompted to enter in your FF3 Personal Access Token (PAT) after which point the accounts are re-fetched and the application is ready to accept a new OFX file.
 
 Once an OFX file is dropped in the drop zone, it is read (in your browser) and the transactions parsed.  If a matching account was found in FF3, then the import starts by processing each transaction.  If an matching account is not found, you will be prompted to create a new account.
 
-For each transaction:\
+For each transaction:
 1. A list of matching transaction from the corresponding account is fetched for 3 days before to 3 days after the transaction date (no filtering, just all transactions between the two dates).
 2. Each transaction is first checked to see the FF3 external_id matches the financial institution's transactionId.
    1. If a match is found, this is considered an exact match and the transaction is not imported.
@@ -31,6 +38,20 @@ If the account balances do not match after the import is complete, take the foll
 
 If neither of the above help, then do your investigation and create an issue.  **Issues will be addressed as time allows.**
 
+### Post import
+It is now possible to edit the transaction post import in FF3-OFX.  If the transaction imported matched an automation rule, then the
+category and tags would be displayed.
+
+#### To Edit a transaction
+1. Click the edit button.
+2. Update the transaction as necessary.
+3. Click the save button.
+
+Notes:
+- To cancel the edit, you can click `Cancel` or the `Editing` button.
+- Edited transaction show an `Edited` tag.
+- If a withdraw is converted into a transfer, then the source account cannot be changed.
+- If a deposit is converted into a transfer, then the destination account cannot be changed.
 
 ## Development
 This project was bootstrapped with [Vite](https://vite.dev/).  Also see: [https://hello-sunil.in/vite-setup-with-yarn/](https://hello-sunil.in/vite-setup-with-yarn/)
@@ -42,52 +63,6 @@ VITE_PROXY = "https://<your FF3 FQDN>"
 ```
 
 Note: The .env.local file is in .gitignore so it will not be checked into the repository.
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default tseslint.config({
-  extends: [
-    // Remove ...tseslint.configs.recommended and replace with this
-    ...tseslint.configs.recommendedTypeChecked,
-    // Alternatively, use this for stricter rules
-    ...tseslint.configs.strictTypeChecked,
-    // Optionally, add this for stylistic rules
-    ...tseslint.configs.stylisticTypeChecked,
-  ],
-  languageOptions: {
-    // other options...
-    parserOptions: {
-      project: ['./tsconfig.node.json', './tsconfig.app.json'],
-      tsconfigRootDir: import.meta.dirname,
-    },
-  },
-})
-```
-
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
-
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default tseslint.config({
-  plugins: {
-    // Add the react-x and react-dom plugins
-    'react-x': reactX,
-    'react-dom': reactDom,
-  },
-  rules: {
-    // other rules...
-    // Enable its recommended typescript rules
-    ...reactX.configs['recommended-typescript'].rules,
-    ...reactDom.configs.recommended.rules,
-  },
-})
-```
 
 ## Available Scripts
 
@@ -107,10 +82,9 @@ You may also see any lint errors in the console.
 
 ### `yarn start` <== To start in production mode
 
-<!-- ### `yarn test` <== TODO
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information. -->
+### `yarn test` <== To run test and coverage
+Launches the tests and coverage.
 
 
 ### `yarn compile`
@@ -135,7 +109,7 @@ executes `yarn compile` and then `yarn dist`.
 
 ## Deployment / Installation
 
-Once the application has been built (or you can download the pre-compiled tar.gz file for any release), it produces a tar file that can be uploaded to your FF3 server.  This app currently only works if it is served from the same domain as your FF3 server, so the steps below help you get it installed in a subdirectory so that it can be easily accessed.
+Once the application has been built (or **you can download the pre-compiled tar.gz file** for any release), it produces a tar file that can be uploaded to your FF3 server.  This app currently only works if it is served from the same domain as your FF3 server, so the steps below help you get it installed in a subdirectory so that it can be easily accessed.
 
 Note: These instructions are for a docker installation but should hopefully be clear enough for other installation types to figure out what is needed.
 
