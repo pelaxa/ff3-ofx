@@ -15,15 +15,11 @@ const OfxMatchingTransactionsTable = (props: OfxTransactionRowProps) => {
 
     return (
         <TableRow>
-            <TableCell style={{ border: 0, paddingBottom: 0, paddingTop: 0 }} colSpan={5}>
+            <TableCell style={{ border: 0, paddingBottom: 0, paddingTop: 0 }} colSpan={6}>
                 <Collapse in={props.open} timeout="auto" unmountOnExit>
                     <Box
                         sx={{
-                            p: 2,
-                            backgroundColor: 'rgb(156, 39, 176)',
-                            borderRadius: 5,
-                            marginBottom: 5,
-                            marginTop: 2
+                            p: 2
                         }}>
                         <Table
                             sx={{ width: '100%', alignSelf: 'flex-end' }}
@@ -33,7 +29,7 @@ const OfxMatchingTransactionsTable = (props: OfxTransactionRowProps) => {
                                 <TableRow key={'match_header'}>
                                     <TableCell colSpan={4} sx={{textAlign: 'center', border: 0}}>Matching Transactions</TableCell>
                                 </TableRow>
-                                <TableRow key={'match_header'}>
+                                <TableRow key={'match_row'}>
                                     <TableCell>Description</TableCell>
                                     <TableCell align="center">Date</TableCell>
                                     <TableCell align="right">

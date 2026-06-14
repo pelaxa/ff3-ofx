@@ -1,6 +1,8 @@
 import { defineConfig, loadEnv, ConfigEnv } from 'vite';
+/// <reference types="vitest" />
 import react from '@vitejs/plugin-react-swc';
 import viteCompression from 'vite-plugin-compression';
+import path from 'path';
 // import httpProxy from 'http-proxy';
 
 // const proxy = httpProxy.createProxyServer();
@@ -33,7 +35,58 @@ export default defineConfig(({command, mode} : ConfigEnv) => {
     ],
     resolve: {
       alias: {
-        '@': '/src'
+        '@': path.resolve(__dirname, 'src')
+      },
+    },
+    build: {
+      outDir: 'dist',
+      rollupOptions: {
+        input: path.resolve(__dirname, 'src/main.tsx'),
+        output: {
+          // Split large dependencies into their own chunks so no single chunk
+          // exceeds the 500 kB warning limit and the browser can cache vendors
+          // independently of app code.
+          manualChunks(id) {
+            if (!id.includes('node_modules')) return undefined;
+            if (id.includes('@mui/icons-material')) return 'mui-icons';
+            if (id.includes('@mui') || id.includes('@base-ui')) return 'mui';
+            if (id.includes('@emotion')) return 'emotion';
+            if (id.includes('@billos') || id.includes('firefly')) return 'firefly';
+            if (id.includes('moment')) return 'moment';
+            if (id.includes('axios')) return 'axios';
+            if (id.includes('react') || id.includes('scheduler')) return 'react';
+            return 'vendor';
+          },
+        },
+      },
+    },
+    test: {
+      globals: true,
+      environment: 'jsdom',
+      setupFiles: ['./test/unit/setupTests.ts'],
+      coverage: {
+        provider: 'v8',
+        reporter: ['text', 'html', 'clover', 'json-summary'],
+        // Measure every source file (even ones no test imports yet) so an
+        // untested file fails the gate instead of silently being ignored.
+        all: true,
+        include: ['src/**/*.{ts,tsx}'],
+        exclude: [
+          'src/main.tsx',          // app entrypoint, not unit-testable
+          'src/theme.ts',          // static theme tokens
+          'src/lib/interfaces.ts', // type declarations only
+          'src/**/*.d.ts',
+          'src/vite-env.d.ts',
+        ],
+        // Every individual file must clear 75% — a well-covered file can no
+        // longer mask a poorly-covered one in the global average.
+        thresholds: {
+          perFile: true,
+          statements: 75,
+          branches: 75,
+          functions: 75,
+          lines: 75,
+        },
       },
     },
     // https://dev.to/manojspace/migrating-from-create-react-app-to-vite-a-step-by-step-guide-2cab

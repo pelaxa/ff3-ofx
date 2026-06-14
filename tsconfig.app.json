@@ -22,12 +22,11 @@
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true,
 
-    /* https://medium.com/@vitor.vicen.te/setting-up-path-aliases-in-a-vite-typescript-react-project-the-ultimate-way-d2a9a8ff7c63 */
     "paths": {
-      "@/*": [
-        "./src/*"
-      ]
+      "*": ["./*"],
+      "@/*": ["./src/*"]
     }
   },
-  "include": ["src"]
+  "include": ["src", "test", "src/**/*.d.ts"],
+  "exclude": ["node_modules", "**/*.spec.ts", "**/*.test.ts"]
 }
