@@ -1,6 +1,6 @@
 {
   "name": "ff3-ofx",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "homepage": "./",
   "private": true,
   "type": "module",
@@ -35,7 +35,7 @@
     "package": "rm -rf ./dist/* ; yarn lint && yarn test && yarn compile && yarn dist",
     "test": "vitest run --coverage",
     "lint": "eslint src --ext js,jsx --report-unused-disable-directives --max-warnings 0",
-    "clean": "rm -rf ./node_modules"
+    "clean": "rm -rf ./node_modules; rm -rf dist; yarn install"
   },
   "cross-os": {
     "dist": {
