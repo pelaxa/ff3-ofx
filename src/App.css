@@ -10,17 +10,27 @@
 }
 
 
-.App-header {
-  min-height: calc(100vh - 64px);
+/* Lock the app to the viewport so the page itself never scrolls; only the
+   active tab's table scrolls internally. */
+.App {
+  height: 100vh;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
+}
+
+.App-header {
   flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: flex-start;
   font-size: calc(8px + 1vmin);
   color: white;
-  padding: 40px 24px;
-  gap: 24px;
+  padding: 24px;
+  gap: 20px;
+  overflow: hidden;
 }
 
 .MuiTableHead-root .MuiTableCell-root {

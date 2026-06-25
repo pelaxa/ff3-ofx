@@ -19,12 +19,15 @@ import Button from '@mui/material/Button';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import CheckIcon from '@mui/icons-material/Check';
 import CloseIcon from '@mui/icons-material/Close';
-import { Alert, AppBar, Box, Card, CardContent, Checkbox, Collapse, FormControl, FormControlLabel, IconButton, InputLabel, MenuItem, Paper, Select, SelectChangeEvent, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Toolbar, Typography } from '@mui/material';
+import { Alert, AppBar, Box, Card, CardContent, Checkbox, Collapse, FormControl, FormControlLabel, IconButton, InputLabel, MenuItem, Paper, Select, SelectChangeEvent, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, ToggleButton, ToggleButtonGroup, Toolbar, Typography } from '@mui/material';
 import * as OFXParser from 'node-ofx-parser';
 import Summary from '@/components/Summary';
 import OfxTransactionsRow from '@/components/OfxTransactionsRow';
 import FileDrop from '@/components/FileDrop';
 import OfxSummary from '@/components/OfxSummary';
+import AllTransactions from '@/components/AllTransactions';
+
+type AppTab = 'import' | 'all';
 
 // Import tag used to identify the import
 const importTag = `OFX Import ${moment().format('YYYY-MM-DD HH:mm:ss')}`;
@@ -60,6 +63,8 @@ interface Token {
 
 function App() {
     const [token, setToken] = useState<Token>();
+    // Which top-level tab is active. Import is the default and shown first.
+    const [activeTab, setActiveTab] = useState<AppTab>('import');
     // List of all accounts
     const [accounts, setAccounts] = useState<AccountRead[]>();
     // The selected account for which transactions are being processed
@@ -739,18 +744,44 @@ function App() {
 
     // console.debug('Account role:', newAccountData?.role);
 
-    const activeStep = !token ? 0
-        : (showFileDrop && !processed && transactions.length === 0) ? 1
-        : !processed ? 2
-        : 3;
+    // Login is now a gate in front of both tabs, so the import stepper only
+    // tracks Import → Processing → Done.
+    const activeStep = (showFileDrop && !processed && transactions.length === 0) ? 0
+        : !processed ? 1
+        : 2;
 
     return (
         <div className="App">
             <AppBar position="sticky">
                 <Toolbar>
-                    <Typography variant="h6" sx={{ flex: 1, fontWeight: 700 }}>
+                    <Typography variant="h6" sx={{ fontWeight: 700 }}>
                         ff3<Box component="span" sx={{ color: 'primary.light' }}>-ofx</Box>
                     </Typography>
+                    <Box sx={{ flex: 1 }} />
+                    {token && (
+                        <ToggleButtonGroup
+                            exclusive
+                            size="small"
+                            value={activeTab}
+                            onChange={(_, value: AppTab | null) => { if (value) setActiveTab(value); }}
+                            sx={{
+                                backgroundColor: 'rgba(255,255,255,.08)',
+                                '& .MuiToggleButton-root': {
+                                    color: 'rgba(255,255,255,.85)',
+                                    border: '1px solid rgba(255,255,255,.35)',
+                                    fontWeight: 600,
+                                    px: 2.2,
+                                    textTransform: 'none',
+                                    '&.Mui-selected': { backgroundColor: '#fff', color: 'primary.main', '&:hover': { backgroundColor: '#fff' } },
+                                    '&:hover': { backgroundColor: 'rgba(255,255,255,.18)' },
+                                },
+                            }}
+                        >
+                            <ToggleButton value="import">Import</ToggleButton>
+                            <ToggleButton value="all">All Transactions</ToggleButton>
+                        </ToggleButtonGroup>
+                    )}
+                    <Box sx={{ flex: 1 }} />
                     <Box component="span" sx={{ mr: 2, px: 1, py: '2px', background: 'rgba(255,255,255,.1)', borderRadius: '10px', fontSize: '11px', color: 'primary.light', fontWeight: 500 }}>
                         v{__APP_VERSION__}
                     </Box>
@@ -772,22 +803,27 @@ function App() {
                 </Alert>
             )}
             <div className="App-header">
-                <Box sx={{ display: 'flex', backgroundColor: 'background.paper', border: '1px solid', borderColor: 'divider', borderRadius: '6px', p: '4px', width: 700 }}>
-                    {(['Login', 'Import', 'Processing', 'Done'] as const).map((label, idx) => (
-                        <Box key={label} sx={{
-                            flex: 1, py: '8px', textAlign: 'center', borderRadius: '4px',
-                            fontSize: '12px', fontWeight: 500, userSelect: 'none',
-                            color: activeStep === idx ? '#fff' : 'text.secondary',
-                            backgroundColor: activeStep === idx ? 'primary.main' : 'transparent',
-                            transition: 'all .15s',
-                        }}>
-                            {idx + 1} · {label}
-                        </Box>
-                    ))}
-                </Box>
-                <Collapse in={!!errorMessage} unmountOnExit>
+                <Collapse in={!!errorMessage} unmountOnExit sx={{ flexShrink: 0 }}>
                     <Alert severity="error" action={<IconButton size="small" onClick={() => { setErrorMessage(undefined); }}><CloseIcon /></IconButton>}>{errorMessage}</Alert>
                 </Collapse>
+                {!!token && activeTab === 'all' && (
+                    <AllTransactions accounts={accounts} />
+                )}
+                {!!token && activeTab === 'import' && (
+                    <Box sx={{ display: 'flex', backgroundColor: 'background.paper', border: '1px solid', borderColor: 'divider', borderRadius: '6px', p: '4px', width: 560, flexShrink: 0 }}>
+                        {(['Import', 'Processing', 'Done'] as const).map((label, idx) => (
+                            <Box key={label} sx={{
+                                flex: 1, py: '8px', textAlign: 'center', borderRadius: '4px',
+                                fontSize: '12px', fontWeight: 500, userSelect: 'none',
+                                color: activeStep === idx ? '#fff' : 'text.secondary',
+                                backgroundColor: activeStep === idx ? 'primary.main' : 'transparent',
+                                transition: 'all .15s',
+                            }}>
+                                {idx + 1} · {label}
+                            </Box>
+                        ))}
+                    </Box>
+                )}
                 <Collapse in={!token} unmountOnExit>
                     <Card sx={{ width: 500 }}>
                         <CardContent sx={{ p: 3 }}>
@@ -827,7 +863,7 @@ function App() {
                         </CardContent>
                     </Card>
                 </Collapse>
-                <Collapse in={!!token && showFileDrop}  unmountOnExit>
+                <Collapse in={!!token && activeTab === 'import' && showFileDrop}  unmountOnExit>
                     <Card sx={{ width: 560 }}>
                         <CardContent sx={{ p: 3 }}>
                             <Typography variant='subtitle2' sx={{ mb: 2, textTransform: 'uppercase', letterSpacing: '0.8px', color: 'primary.light' }}>
@@ -837,10 +873,10 @@ function App() {
                         </CardContent>
                     </Card>
                 </Collapse>
-                <Collapse in={ofxData && ofxData?.accounts.length > 1}  unmountOnExit>
+                <Collapse in={activeTab === 'import' && ofxData && ofxData?.accounts.length > 1}  unmountOnExit>
                     <OfxSummary accounts={ofxData?.accounts || []} clickHandler={handleNextAccount} selectionAllowed={processed}/>
                 </Collapse>
-                <Collapse in={!!token && !showFileDrop && !!matchingAccounts && matchingAccounts.length > 1}  unmountOnExit>
+                <Collapse in={!!token && activeTab === 'import' && !showFileDrop && !!matchingAccounts && matchingAccounts.length > 1}  unmountOnExit>
                     <Card sx={{ width: 720 }}>
                         <CardContent sx={{ p: 3 }}>
                             <Typography variant='subtitle2' sx={{ mb: 1, textTransform: 'uppercase', letterSpacing: '0.8px', color: 'primary.light' }}>
@@ -919,7 +955,7 @@ function App() {
                         </CardContent>
                     </Card>
                 </Collapse>
-                <Collapse in={!!token && !showFileDrop && !!newAccountData}  unmountOnExit>
+                <Collapse in={!!token && activeTab === 'import' && !showFileDrop && !!newAccountData}  unmountOnExit>
                     <Card sx={{ width: 560 }}>
                         <CardContent sx={{ p: 3 }}>
                             <Typography variant='subtitle2' sx={{ mb: 1, textTransform: 'uppercase', letterSpacing: '0.8px', color: 'primary.light' }}>
@@ -1001,7 +1037,7 @@ function App() {
                         </CardContent>
                     </Card>
                 </Collapse>
-                {transactions && transactions.length > 0 && (
+                {activeTab === 'import' && transactions && transactions.length > 0 && (
                     <>
                         <Summary bankBalance={bankBalance} accountId={selectedAccount?.id} processed={processed} progress={progress} />
                         {processed && (
@@ -1013,6 +1049,7 @@ function App() {
                                 borderColor: 'divider',
                                 borderRadius: 2,
                                 gap: 2,
+                                flexShrink: 0,
                             }}>
                                 <Box>
                                     <Typography variant="subtitle2">Import another file?</Typography>
@@ -1022,8 +1059,8 @@ function App() {
                                 </Button>
                             </Box>
                         )}
-                        <div className="scrollView" >
-                            <TableContainer component={Paper}>
+                        <Box className="scrollView" sx={{ flex: 1, minHeight: 0, display: 'flex' }}>
+                            <TableContainer component={Paper} sx={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
                                 <Table stickyHeader aria-label="collapsible sticky table">
                                     <TableHead>
                                         <TableRow className="Header-Row">
@@ -1057,7 +1094,7 @@ function App() {
                                     </TableBody>
                                 </Table>
                             </TableContainer>
-                        </div>
+                        </Box>
                     </>
                 )}
             </div>
