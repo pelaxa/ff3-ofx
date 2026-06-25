@@ -19,7 +19,7 @@ import Button from '@mui/material/Button';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import CheckIcon from '@mui/icons-material/Check';
 import CloseIcon from '@mui/icons-material/Close';
-import { Alert, AppBar, Box, Card, CardContent, Checkbox, Collapse, FormControl, FormControlLabel, IconButton, InputLabel, MenuItem, Paper, Select, SelectChangeEvent, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, ToggleButton, ToggleButtonGroup, Toolbar, Typography } from '@mui/material';
+import { Alert, AppBar, Box, Card, CardContent, Checkbox, Collapse, FormControl, FormControlLabel, IconButton, InputLabel, MenuItem, Paper, Select, SelectChangeEvent, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, ToggleButton, ToggleButtonGroup, Toolbar, Tooltip, Typography } from '@mui/material';
 import * as OFXParser from 'node-ofx-parser';
 import Summary from '@/components/Summary';
 import OfxTransactionsRow from '@/components/OfxTransactionsRow';
@@ -782,9 +782,39 @@ function App() {
                         </ToggleButtonGroup>
                     )}
                     <Box sx={{ flex: 1 }} />
-                    <Box component="span" sx={{ mr: 2, px: 1, py: '2px', background: 'rgba(255,255,255,.1)', borderRadius: '10px', fontSize: '11px', color: 'primary.light', fontWeight: 500 }}>
-                        v{__APP_VERSION__}
-                    </Box>
+                    <Tooltip
+                        arrow
+                        placement="bottom"
+                        title={updateAvailable ? (
+                            <Box sx={{ fontSize: '12px', lineHeight: 1.5, p: '2px' }}>
+                                A new version of <b>{__APP_NAME__}</b> is available.<br />
+                                You are running <b>v{__APP_VERSION__}</b>.{' '}
+                                <Box component="a" href="https://github.com/pelaxa/ff3-ofx/releases/latest" target="_new" sx={{ color: 'primary.light', fontWeight: 600 }}>
+                                    Get the latest release
+                                </Box>.
+                            </Box>
+                        ) : ''}
+                    >
+                        <Box
+                            component="span"
+                            onClick={updateAvailable ? () => window.open('https://github.com/pelaxa/ff3-ofx/releases/latest', '_new') : undefined}
+                            sx={{
+                                mr: 2, px: 1, py: '2px', borderRadius: '10px', fontSize: '11px',
+                                color: 'primary.light', fontWeight: 500,
+                                background: updateAvailable ? 'rgba(144,202,249,.25)' : 'rgba(255,255,255,.1)',
+                                cursor: updateAvailable ? 'pointer' : 'default',
+                                display: 'inline-flex', alignItems: 'center', gap: '4px',
+                                '@keyframes versionPulse': {
+                                    '0%':   { boxShadow: '0 0 0 0 rgba(144,202,249,.55)' },
+                                    '70%':  { boxShadow: '0 0 0 7px rgba(144,202,249,0)' },
+                                    '100%': { boxShadow: '0 0 0 0 rgba(144,202,249,0)' },
+                                },
+                                animation: updateAvailable ? 'versionPulse 1.8s ease-out infinite' : 'none',
+                            }}
+                        >
+                            v{__APP_VERSION__}{updateAvailable ? ' •' : ''}
+                        </Box>
+                    </Tooltip>
                     {token && (
                         <Button
                             color="inherit"
@@ -797,11 +827,6 @@ function App() {
                     )}
                 </Toolbar>
             </AppBar>
-            {updateAvailable && (
-                <Alert variant="outlined" severity="info">
-                    You are currently running <b>{__APP_NAME__}</b> version <b>{__APP_VERSION__}</b>.  There is a new version available <a href="https://github.com/pelaxa/ff3-ofx/releases/latest" target="_new">here</a>.
-                </Alert>
-            )}
             <div className="App-header">
                 <Collapse in={!!errorMessage} unmountOnExit sx={{ flexShrink: 0 }}>
                     <Alert severity="error" action={<IconButton size="small" onClick={() => { setErrorMessage(undefined); }}><CloseIcon /></IconButton>}>{errorMessage}</Alert>

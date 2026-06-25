@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import {
     Alert,
     Autocomplete,
@@ -112,6 +112,9 @@ const AllTransactions = (props: AllTransactionsProps) => {
     const [accountId, setAccountId] = useState<string | undefined>();
     const [range, setRange] = useState<DateRange | undefined>('30d');
     const [quickFilter, setQuickFilter] = useState<QuickFilter>('all');
+    // `searchInput` is the live field value; `search` is the committed term that
+    // actually drives the query (only updated when the user presses Enter).
+    const [searchInput, setSearchInput] = useState('');
     const [search, setSearch] = useState('');
 
     const [editingId, setEditingId] = useState<string | undefined>();
@@ -134,12 +137,40 @@ const AllTransactions = (props: AllTransactionsProps) => {
         setLoading(true);
         setError(undefined);
         try {
-            const { start, end } = rangeToDates(range);
-            const result = await ApiService.listTransactionsPage(nextPage, {
-                accountId: accountId || undefined,
-                start,
-                end,
-            });
+            // "This month" overrides the date-range dropdown.
+            const { start, end } = quickFilter === 'thismonth'
+                ? { start: moment().startOf('month'), end: moment().endOf('month') }
+                : rangeToDates(range);
+            const term = search.trim();
+            // The search endpoint is required for free-text and for filters that
+            // can only be expressed with search operators (uncategorized/untagged).
+            const useSearch = !!term || quickFilter === 'uncategorized' || quickFilter === 'untagged';
+
+            let result;
+            if (useSearch) {
+                const parts: string[] = [];
+                if (term) parts.push(term);
+                if (quickFilter === 'uncategorized') parts.push('has_any_category:false');
+                if (quickFilter === 'untagged') parts.push('has_any_tag:false');
+                if (quickFilter === 'withdrawals') parts.push('type:withdrawal');
+                if (quickFilter === 'deposits') parts.push('type:deposit');
+                if (quickFilter === 'transfers') parts.push('type:transfer');
+                if (accountId) parts.push(`account_id:${accountId}`);
+                if (start) parts.push(`date_after:${start.format('YYYY-MM-DD')}`);
+                if (end) parts.push(`date_before:${end.format('YYYY-MM-DD')}`);
+                result = await ApiService.searchTransactionsPage(nextPage, parts.join(' '));
+            } else {
+                const type = quickFilter === 'withdrawals' ? 'withdrawal'
+                    : quickFilter === 'deposits' ? 'deposit'
+                    : quickFilter === 'transfers' ? 'transfer'
+                    : undefined;
+                result = await ApiService.listTransactionsPage(nextPage, {
+                    accountId: accountId || undefined,
+                    start,
+                    end,
+                    type,
+                });
+            }
             setRows((prev) => (replace ? result.data : [...prev, ...result.data]));
             setPage(result.currentPage);
             setTotalPages(result.totalPages);
@@ -149,7 +180,7 @@ const AllTransactions = (props: AllTransactionsProps) => {
             setLoading(false);
             loadingRef.current = false;
         }
-    }, [accountId, range]);
+    }, [accountId, range, quickFilter, search]);
 
     const getAccountEntries = () => {
         if (props.accounts) {
@@ -158,7 +189,8 @@ const AllTransactions = (props: AllTransactionsProps) => {
         return [{id: 'dummy', label: 'No accounts'}];
     }
 
-    // Reset and reload whenever the server-side filters (account / date range) change.
+    // Reset and reload whenever any server-side filter changes. `search` only
+    // changes when the user commits it with Enter, so typing does not refetch.
     useEffect(() => {
         setRows([]);
         setPage(0);
@@ -166,7 +198,7 @@ const AllTransactions = (props: AllTransactionsProps) => {
         if (scrollerRef.current) scrollerRef.current.scrollTop = 0;
         loadPage(1, true);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [accountId, range]);
+    }, [accountId, range, quickFilter, search]);
 
     const handleScroll = useCallback(() => {
         const el = scrollerRef.current;
@@ -175,32 +207,6 @@ const AllTransactions = (props: AllTransactionsProps) => {
             loadPage(page + 1, false);
         }
     }, [loadPage, page, totalPages]);
-
-    // Client-side quick filter + search over the rows loaded so far.
-    const visibleRows = useMemo(() => {
-        const term = search.trim().toLowerCase();
-        return rows.filter((t) => {
-            switch (quickFilter) {
-                case 'uncategorized': if (categoryNames(t).length > 0) return false; break;
-                case 'untagged': if (allTags(t).length > 0) return false; break;
-                case 'withdrawals': if (typeOf(t) !== TransactionTypeProperty.WITHDRAWAL) return false; break;
-                case 'deposits': if (typeOf(t) !== TransactionTypeProperty.DEPOSIT) return false; break;
-                case 'transfers': if (typeOf(t) !== TransactionTypeProperty.TRANSFER) return false; break;
-                case 'thismonth': if (!moment(firstSplit(t)?.date).isSame(moment(), 'month')) return false; break;
-                case 'all': default: break;
-            }
-            if (term) {
-                const haystack = [
-                    displayDescription(t),
-                    ...categoryNames(t),
-                    ...allTags(t),
-                    accountLabel(t),
-                ].join(' ').toLowerCase();
-                if (!haystack.includes(term)) return false;
-            }
-            return true;
-        });
-    }, [rows, quickFilter, search]);
 
     const ensureEditorMetadata = useCallback(async () => {
         if (editorMetadata || metadataLoading) return;
@@ -275,17 +281,27 @@ const AllTransactions = (props: AllTransactionsProps) => {
                     disableClearable
                     options={RANGE_OPTIONS}
                     sx={{ width: 200 }}
-                    onInputChange={(_, v) => {
-                        setRange(RANGE_OPTIONS.find((range) => range.label === v)?.id);
-                    }}
+                    value={RANGE_OPTIONS.find((r) => r.id === range) ?? RANGE_OPTIONS[0]}
+                    isOptionEqualToValue={(option, value) => option.id === value.id}
+                    onChange={(_, v) => setRange(v?.id)}
                     renderInput={(params) => <TextField {...params} label='Date range' variant='outlined' />}
                 />
                 <TextField
                     size="medium"
                     variant="outlined"
-                    placeholder="Search description, category, tag…"
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Search description, category, tag… (press Enter)"
+                    value={searchInput}
+                    onChange={(e) => setSearchInput(e.target.value)}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                            e.preventDefault();
+                            // Commit the term — this refetches via the reset effect.
+                            // If unchanged, force a reload so Enter always re-queries.
+                            const term = searchInput.trim();
+                            if (term === search) loadPage(1, true);
+                            else setSearch(term);
+                        }
+                    }}
                     sx={{ flex: 1, minWidth: 200 }}
                 />
                 <Button variant="outlined" startIcon={<RefreshIcon />} onClick={() => loadPage(1, true)} disabled={loading}>
@@ -314,7 +330,7 @@ const AllTransactions = (props: AllTransactionsProps) => {
                         </TableRow>
                     </TableHead>
                     <TableBody>
-                        {visibleRows.map((t) => {
+                        {rows.map((t) => {
                             const amount = signedAmount(t);
                             const cats = categoryNames(t);
                             const tags = allTags(t).filter((tag) => tag.indexOf('OFX ') !== 0);
@@ -393,7 +409,7 @@ const AllTransactions = (props: AllTransactionsProps) => {
                                 </TableCell>
                             </TableRow>
                         )}
-                        {!loading && visibleRows.length === 0 && (
+                        {!loading && rows.length === 0 && (
                             <TableRow>
                                 <TableCell colSpan={6} align="center" sx={{ color: 'text.secondary', py: 4 }}>
                                     No transactions match the current filters.
@@ -405,7 +421,7 @@ const AllTransactions = (props: AllTransactionsProps) => {
             </TableContainer>
 
             <Typography variant="caption" sx={{ color: tokens.textMuted, textAlign: 'center', mt: 1, flexShrink: 0 }}>
-                Showing {visibleRows.length} loaded transaction{visibleRows.length === 1 ? '' : 's'}
+                Showing {rows.length} loaded transaction{rows.length === 1 ? '' : 's'}
                 {allLoaded ? ' · all loaded' : ' · scroll to load more'} · sourced from FireFly III
             </Typography>
         </Box>

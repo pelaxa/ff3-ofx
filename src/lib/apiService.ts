@@ -6,6 +6,7 @@ import {
     BillsService,
     BudgetsService,
     CategoriesService,
+    SearchService,
     TagsService,
     TransactionsService,
     AccountRoleProperty,
@@ -19,6 +20,7 @@ import {
     type TagRead,
     type TransactionRead,
     type TransactionStoreWritable,
+    type TransactionTypeFilter,
     type TransactionUpdateWritable,
     type ValidationErrorResponse,
     BadRequestResponse,
@@ -250,13 +252,14 @@ const getTransactions = async (
 // more pages as the user scrolls instead of pulling everything up front.
 const listTransactionsPage = async (
     page: number,
-    options: { accountId?: string; start?: Moment; end?: Moment } = {},
+    options: { accountId?: string; start?: Moment; end?: Moment; type?: TransactionTypeFilter } = {},
 ): Promise<{ data: TransactionRead[]; currentPage: number; totalPages: number }> => {
     const c = getClient();
     if (!c) return { data: [], currentPage: page, totalPages: 0 };
     const query: Record<string, unknown> = { limit: PAGE_SIZE, page };
     if (options.start) query.start = options.start.format(DATE_FORMAT);
     if (options.end) query.end = options.end.format(DATE_FORMAT);
+    if (options.type) query.type = options.type;
     const result = options.accountId
         ? await AccountsService.listTransactionByAccount({
               client: c,
@@ -275,6 +278,30 @@ const listTransactionsPage = async (
             ? `GET /accounts/${options.accountId}/transactions`
             : 'GET /transactions';
         throw buildRequestError(endpoint, response, error);
+    }
+    return {
+        data: data.data,
+        currentPage: data.meta?.pagination?.current_page ?? page,
+        totalPages: data.meta?.pagination?.total_pages ?? 1,
+    };
+};
+
+// Fetch a single page of search results. The `query` string uses FireFly III's
+// search operators (e.g. `has_any_category:false`, `type:withdrawal`,
+// `account_id:5`, `date_after:2026-01-01`) plus any free-text terms.
+const searchTransactionsPage = async (
+    page: number,
+    query: string,
+): Promise<{ data: TransactionRead[]; currentPage: number; totalPages: number }> => {
+    const c = getClient();
+    if (!c || !query.trim()) return { data: [], currentPage: page, totalPages: 0 };
+    const { data, error, response } = await SearchService.searchTransactions({
+        client: c,
+        throwOnError: false,
+        query: { limit: PAGE_SIZE, page, query },
+    });
+    if (error || !data) {
+        throw buildRequestError('GET /search/transactions', response, error);
     }
     return {
         data: data.data,
@@ -444,6 +471,7 @@ const ApiService = {
     getTransactions,
     getAccountTransactions,
     listTransactionsPage,
+    searchTransactionsPage,
     addTransaction,
     updateTransaction,
     deleteTransaction,
