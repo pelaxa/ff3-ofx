@@ -56,12 +56,29 @@ describe('Utils.parseOfxTransaction', () => {
     it('maps OFX fields onto OfxParsedTransaction', () => {
         const parsed = Utils.parseOfxTransaction(txnNode());
         expect(parsed).not.toBeNull();
-        expect(parsed!.transactionId).toBe('FIT-1');
-        expect(parsed!.transactionType).toBe('DEBIT');
-        expect(parsed!.amount).toBe(-12.34);
-        expect(parsed!.description).toBe('Coffee Shop');
-        expect(parsed!.memo).toBe('morning latte');
-        expect(moment.isMoment(parsed!.datePosted)).toBe(true);
+        expect(parsed!.title).toBeNull();
+        expect(parsed!.transactions).toHaveLength(1);
+        const sub = parsed!.transactions[0];
+        expect(sub.transactionId).toBe('FIT-1');
+        expect(sub.transactionType).toBe('DEBIT');
+        expect(sub.amount).toBe(-12.34);
+        expect(sub.description).toBe('Coffee Shop');
+        expect(sub.memo).toBe('morning latte');
+        expect(moment.isMoment(sub.datePosted)).toBe(true);
+    });
+
+    it('groups array-valued fields into one split transaction titled by the first NAME', () => {
+        const parsed = Utils.parseOfxTransaction({
+            TRNTYPE: ['CREDIT', 'CREDIT'],
+            DTPOSTED: ['20240115120000', '20240115120000'],
+            TRNAMT: ['33.62', '958.02'],
+            FITID: ['A', 'B'],
+            NAME: ['Payment', 'Payment'],
+            MEMO: ['x', 'y'],
+        } as never);
+        expect(parsed!.title).toBe('Payment');
+        expect(parsed!.transactions.map((t) => t.transactionId)).toEqual(['A', 'B']);
+        expect(parsed!.transactions.map((t) => t.amount)).toEqual([33.62, 958.02]);
     });
 
     it('returns null for a falsy txn', () => {
@@ -100,8 +117,8 @@ describe('Utils.getOfxData (bank/checking)', () => {
         expect(acc.currency).toBe('USD');
         expect(acc.status).toBe(OfxAccountStatus.UNPROCESSED);
         expect(acc.transactions).toHaveLength(2);
-        expect(acc.transactions![0]!.transactionId).toBe('FIT-1');
-        expect(acc.transactions![1]!.amount).toBe(50);
+        expect(acc.transactions![0]!.transactions[0].transactionId).toBe('FIT-1');
+        expect(acc.transactions![1]!.transactions[0].amount).toBe(50);
     });
 
     it('wraps a single-transaction object into an array', () => {

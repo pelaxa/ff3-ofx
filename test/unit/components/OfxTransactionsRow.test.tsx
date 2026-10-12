@@ -17,12 +17,15 @@ vi.mock('@/components/TransactionEditor', () => ({
 }));
 
 const baseTxn = (status?: OfxImportStatus, opts: Partial<OfxParsedTransaction> = {}): OfxParsedTransaction => ({
-    transactionId: 'F1',
-    transactionType: 'DEBIT',
-    datePosted: moment('2024-01-15'),
-    amount: -12.34,
-    description: 'Coffee Shop',
-    memo: 'latte',
+    title: null,
+    transactions: [{
+        transactionId: 'F1',
+        transactionType: 'DEBIT',
+        datePosted: moment('2024-01-15'),
+        amount: -12.34,
+        description: 'Coffee Shop',
+        memo: 'latte',
+    }],
     importStatus: status === undefined ? undefined : { status, ...(opts.importStatus ?? {}) },
     ...opts,
 });
