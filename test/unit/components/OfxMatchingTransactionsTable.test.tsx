@@ -34,12 +34,15 @@ const splitTxn = (): MatchedTransaction => {
 };
 
 const txn = (matches: MatchedTransaction[]): OfxParsedTransaction => ({
-    transactionId: 'T',
-    transactionType: 'DEBIT',
-    datePosted: moment('2024-02-10'),
-    amount: -15,
-    description: 'Lunch',
-    memo: '',
+    title: null,
+    transactions: [{
+        transactionId: 'T',
+        transactionType: 'DEBIT',
+        datePosted: moment('2024-02-10'),
+        amount: -15,
+        description: 'Lunch',
+        memo: '',
+    }],
     importStatus: { status: OfxImportStatus.MATCH_VALUE, matchingTransactions: matches },
 });
 

@@ -25,9 +25,6 @@ import moment, { Moment } from 'moment';
 import {
     TransactionTypeProperty,
     type AccountRead,
-    type BillRead,
-    type BudgetRead,
-    type CategoryRead,
     type TransactionRead,
 } from '@billos/firefly-iii-sdk';
 import ApiService from '@/lib/apiService';
@@ -35,6 +32,8 @@ import utils from '@/lib/utils';
 import { tokens } from '@/theme';
 import TransactionTypeIcon from '@/components/TransactionTypeIcon';
 import TransactionEditor from '@/components/TransactionEditor';
+import { useEditorMetadata } from '@/lib/useEditorMetadata';
+import type { EditorMetadata } from '@/lib/interfaces';
 
 interface AllTransactionsProps {
     // Asset accounts used to populate the account filter dropdown.
@@ -101,14 +100,6 @@ const accountLabel = (t: TransactionRead): string => {
     if (typeOf(t) === TransactionTypeProperty.TRANSFER) return `${s.source_name ?? ''} → ${s.destination_name ?? ''}`;
     return s.source_name ?? '';
 };
-
-interface EditorMetadata {
-    accounts: AccountRead[];
-    categories: CategoryRead[];
-    budgets: BudgetRead[];
-    bills: BillRead[];
-    tags: string[];
-}
 
 interface RowProps {
     transaction: TransactionRead;
@@ -210,8 +201,7 @@ const AllTransactions = (props: AllTransactionsProps) => {
     const [search, setSearch] = useState('');
 
     const [editingId, setEditingId] = useState<string | undefined>();
-    const [editorMetadata, setEditorMetadata] = useState<EditorMetadata>();
-    const [metadataLoading, setMetadataLoading] = useState(false);
+    const { editorMetadata, ensureEditorMetadata, mergeSavedTransaction } = useEditorMetadata();
 
     const scrollerRef = useRef<HTMLDivElement | null>(null);
     // Guards against the scroll handler firing a second fetch before state settles.
@@ -294,25 +284,6 @@ const AllTransactions = (props: AllTransactionsProps) => {
         }
     }, [loadPage, page, totalPages]);
 
-    const ensureEditorMetadata = useCallback(async () => {
-        if (editorMetadata || metadataLoading) return;
-        setMetadataLoading(true);
-        try {
-            const [accounts, categories, budgets, bills, tags] = await Promise.all([
-                ApiService.listAllAccounts(),
-                ApiService.listCategories(),
-                ApiService.listBudgets(),
-                ApiService.listBills(),
-                ApiService.listTags(),
-            ]);
-            setEditorMetadata({ accounts, categories, budgets, bills, tags });
-        } catch (e) {
-            console.error('Failed to load editor metadata', e);
-        } finally {
-            setMetadataLoading(false);
-        }
-    }, [editorMetadata, metadataLoading]);
-
     // Stable callbacks (no per-render identity change) so memoized rows are not
     // forced to re-render. `setEditingId` uses a functional update to avoid a
     // dependency on `editingId`.
@@ -325,8 +296,10 @@ const AllTransactions = (props: AllTransactionsProps) => {
 
     const handleSaved = useCallback((updated: TransactionRead) => {
         setRows((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
+        // Fold anything FF3 created while saving (new category, tag, account...) into the autocomplete data
+        mergeSavedTransaction(updated);
         setEditingId(undefined);
-    }, []);
+    }, [mergeSavedTransaction]);
 
     const handleDeleted = useCallback((id: string) => {
         setRows((prev) => prev.filter((t) => t.id !== id));

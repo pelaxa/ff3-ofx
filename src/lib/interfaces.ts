@@ -1,9 +1,14 @@
 import { Moment } from 'moment';
 import type {
+    AccountRead,
     AccountRoleProperty,
+    BillRead,
+    BudgetRead,
+    CategoryRead,
     TransactionRead,
     TransactionStoreWritable,
 } from '@billos/firefly-iii-sdk';
+import type ApiService from '@/lib/apiService';
 
 export interface OfxTransaction {
     TRNTYPE: string;
@@ -87,3 +92,42 @@ export interface FF3NewAccount {
     monthly_payment_date?: string;
     type?: string;
 }
+
+// The numbers the summary shows, all rounded to 2 decimals
+export interface BalanceSummary {
+    // The balance from the OFX file (adjusted for a virtual balance on credit cards)
+    bankBalance: number;
+    // The balance FireFly III holds for the account (adjusted the same way)
+    accountBalance: number;
+    // bankBalance - accountBalance. 0 means the bank and FireFly agree.
+    diff: number;
+}
+
+// The personal access token used to talk to FireFly III
+export interface Token {
+    value: string;
+}
+
+// Where a remembered token is kept between visits. The app keeps it in the browser's localStorage.
+export interface TokenStore {
+    // Returns the remembered token, or undefined when nothing usable is stored
+    load: () => Token | undefined;
+    // Remembers the given token for next time
+    save: (token: Token) => void;
+    // Forgets the remembered token
+    clear: () => void;
+}
+
+// Lazy-loaded metadata for the autocomplete fields in the editor
+export interface EditorMetadata {
+    accounts: AccountRead[];
+    categories: CategoryRead[];
+    budgets: BudgetRead[];
+    bills: BillRead[];
+    tags: string[];
+}
+
+// The Firefly calls an import depends on: reading the account's existing transactions
+// and storing a new one. Functions receive these as a parameter instead of calling
+// ApiService directly, so the matching logic works with any source of transactions.
+export type ImportStore = Pick<typeof ApiService, 'getAccountTransactions' | 'addTransaction'>;
