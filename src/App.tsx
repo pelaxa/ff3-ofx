@@ -20,7 +20,7 @@ import RefreshIcon from '@mui/icons-material/Refresh';
 import CheckIcon from '@mui/icons-material/Check';
 import CloseIcon from '@mui/icons-material/Close';
 import { Alert, AppBar, Box, Card, CardContent, Checkbox, Collapse, FormControl, FormControlLabel, IconButton, InputLabel, MenuItem, Paper, Select, SelectChangeEvent, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, ToggleButton, ToggleButtonGroup, Toolbar, Tooltip, Typography } from '@mui/material';
-import * as OFXParser from 'node-ofx-parser';
+import { parseStrict as parseOFX } from 'ofx-js';
 import Summary from '@/components/Summary';
 import OfxTransactionsRow from '@/components/OfxTransactionsRow';
 import FileDrop from '@/components/FileDrop';
@@ -274,7 +274,7 @@ function App() {
             const reader = new FileReader();
             reader.onload = (e: ProgressEvent<FileReader>) => {
                 console.debug('file content', e);
-                const parsedData = OFXParser.parse(e.target?.result);
+                const parsedData = parseOFX(e.target?.result as string);
                 // console.debug(parsedData);
                 try {
                     const tmpOfxData = Utils.getOfxData(parsedData);
@@ -330,21 +330,6 @@ function App() {
     }
 
 
-    // This method adds a new transaction to the Firefly account based on user request
-    const addAnyways = async (existingTxn: OfxParsedTransaction) => {
-        if (existingTxn.importStatus?.ff3Txn2Import) {
-            const newTransaction = await addTransaction(existingTxn.importStatus?.ff3Txn2Import);
-
-            if (newTransaction) {
-                existingTxn.importStatus = newTransaction;
-                console.log('Added new transaction (anyways) successfully', newTransaction);
-                setTransactions([...transactions]);
-                // Change progress so that the summary also updates
-                setProgress(progress + 1);
-            }
-        }
-    };
-
     // This method adds a new transaction to the Firefly account
     const addTransaction = useCallback(async (newTxn: TransactionStoreWritable): Promise<OfxParsedTransaction["importStatus"]> => {
         console.log('Adding new transaction', newTxn);
@@ -369,6 +354,23 @@ function App() {
         }
         return newTransaction;
     }, []);
+
+    // This method adds a new transaction to the Firefly account based on user request.
+    // Uses functional state updates and has no changing dependencies so its identity
+    // is stable — this keeps the memoized OfxTransactionsRow from re-rendering.
+    const addAnyways = useCallback(async (existingTxn: OfxParsedTransaction) => {
+        if (existingTxn.importStatus?.ff3Txn2Import) {
+            const newTransaction = await addTransaction(existingTxn.importStatus?.ff3Txn2Import);
+
+            if (newTransaction) {
+                existingTxn.importStatus = newTransaction;
+                console.log('Added new transaction (anyways) successfully', newTransaction);
+                setTransactions((prev) => [...prev]);
+                // Change progress so that the summary also updates
+                setProgress((p) => p + 1);
+            }
+        }
+    }, [addTransaction]);
 
     const ensureEditorMetadata = useCallback(async () => {
         if (editorMetadata || metadataLoading) return;
@@ -494,8 +496,6 @@ function App() {
     const handleEditDeleted = useCallback((idx: number) => {
         setTransactions((prev) => prev.map((t, i) => {
             if (i !== idx || !t.importStatus) return t;
-            // Update the progress to make sure summary is also updated
-            setProgress(progress +1);
             return {
                 ...t,
                 importStatus: {
@@ -508,8 +508,11 @@ function App() {
                 },
             };
         }));
+        // Bump progress so the Summary recomputes. Functional update keeps this
+        // callback's identity stable (no `progress` dependency).
+        setProgress((p) => p + 1);
         setEditingTxnIdx(undefined);
-    }, [progress]);
+    }, []);
 
     const processTransactions = useCallback(async () => {
         // Process each transaction by
@@ -532,14 +535,15 @@ function App() {
 
             if (parsedTxn) {
                 // We do this to make sure we only have 2 digit decimals
-                const parsedAmount = parsedTxn.amount ? parseFloat(parsedTxn.amount.toFixed(2)) : 0;
+                const parsedTxnAmount = parsedTxn.transactions.reduce((txnSum, txn) => txnSum+parseFloat((txn.amount || 0).toFixed(2)), 0);
+                const parsedTxnDatePosted = parsedTxn.transactions[0].datePosted;
 
-                console.log('Processing OFX transaction', parsedTxn.description, parsedTxn);
+                console.log('Processing OFX transaction', parsedTxn.title || parsedTxn.transactions[0].description, parsedTxn);
 
                 const relatedTransactions = await ApiService.getAccountTransactions(
                     selectedAccount.id,
-                    moment(parsedTxn.datePosted).add(-3, 'days'),
-                    moment(parsedTxn.datePosted).add(3, 'days'),
+                    moment(parsedTxnDatePosted).add(-3, 'days'),
+                    moment(parsedTxnDatePosted).add(3, 'days'),
                 ),
                     matchingTransactions: MatchedTransaction[] = [];
                 let proceed = true,
@@ -556,16 +560,16 @@ function App() {
                             // amount do not match exactly.  eg. 57.66 vs 57.65999999
                             const txnAmount = txn.amount ? parseFloat(parseFloat(txn.amount).toFixed(2)) : 0;
                             console.log('***** Examining txn:');
-                            console.log('    **** ffAmount:', txnAmount, ' <==> Bank Amount:', parsedAmount);
-                            console.log('    **** ffExtId:', txn.external_id, 'ffIntId:', txn.internal_reference, ' <==> Bank ID:', parsedTxn.transactionId);
+                            console.log('    **** ffAmount:', txnAmount, ' <==> Bank Amount:', parsedTxnAmount);
+                            console.log('    **** ffExtId:', txn.external_id, 'ffIntId:', txn.internal_reference, ' <==> Bank ID:', parsedTxn.transactions[0].transactionId);
                             console.log('    **** ffSourceAccount:', txn.source_id, ', ffDestinationAccount:', txn.destination_id, ' <==> Bank Account:', selectedAccount.id);
                             // First we check for an exact match based on internal or external id.
                             // parsedTxn.transactionId should be unique but it is not in all cases, 
                             // so we check that and the amount
                             if ((
-                                (txn.internal_reference && txn.internal_reference === parsedTxn.transactionId) ||
-                                (txn.external_id && txn.external_id === parsedTxn.transactionId)
-                            ) && Math.abs(txnAmount || 0) === Math.abs(parsedAmount || 0)) {
+                                (txn.internal_reference && txn.internal_reference === parsedTxn.transactions[0].transactionId) ||
+                                (txn.external_id && txn.external_id === parsedTxn.transactions[0].transactionId)
+                            ) && Math.abs(txnAmount || 0) === Math.abs(parsedTxnAmount || 0)) {
                                 proceed = false;
                                 exactMatchFound = true;
                                 matchingTransactions.push(ffTxn);
@@ -573,16 +577,16 @@ function App() {
                                 break;
                             } else if (txnAmount) {
                                 runningTotal += txnAmount;
-                                if (txnAmount === Math.abs(parsedAmount)) {
+                                if (txnAmount === Math.abs(parsedTxnAmount)) {
                                     // amountMatchFound = true;
                                     if (
-                                        (parsedTxn.amount < 0 && txn.source_id === selectedAccount.id) ||
-                                        (parsedTxn.amount >= 0 && txn.destination_id === selectedAccount.id)
+                                        (parsedTxnAmount < 0 && txn.source_id === selectedAccount.id) ||
+                                        (parsedTxnAmount >= 0 && txn.destination_id === selectedAccount.id)
                                     ) {
                                         console.log('********** Found AMOUNT match');
                                         // console.info(
                                         //     '********** Found AMOUNT match, parsedTxn.amount',
-                                        //     parsedAmount,
+                                        //     parsedTxnAmount,
                                         //     'Source match: ',
                                         //     txn.source_id === selectedAccount.id,
                                         //     'Dest match: ',
@@ -591,7 +595,7 @@ function App() {
 
                                         matchingTransactions.push(ffTxn);
                                         // If the description also matches, then it is an exact match
-                                        if (parsedTxn.description === txn.description) {
+                                        if (parsedTxn.transactions[0].description === txn.description) {
                                             console.log('********** Found AMOUNT.EXACT match');
                                             exactMatchFound = false;
                                             proceed = false;
@@ -605,7 +609,7 @@ function App() {
                         // It is possible the transaction was split so check to make sure we have more than 1 transaction
                         // and the total matches and only add it if it is not already in the array
                         if (
-                            ffTxn.attributes.transactions.length > 1 && parseFloat(runningTotal.toFixed(2)) === Math.abs(parsedAmount) &&
+                            ffTxn.attributes.transactions.length > 1 && parseFloat(runningTotal.toFixed(2)) === Math.abs(parsedTxnAmount) &&
                             !matchingTransactions.includes(ffTxn)
                         ) {
                             console.log('********** Found TOTAL match');
@@ -623,22 +627,24 @@ function App() {
                 const newTxn: TransactionStoreWritable = {
                     error_if_duplicate_hash: true,
                     apply_rules: true,
-                    group_title: null,
-                    transactions: [
-                        {
-                            type: parsedTxn.amount >= 0 ? TransactionTypeProperty.DEPOSIT : TransactionTypeProperty.WITHDRAWAL,
-                            date: parsedTxn.datePosted.format(),
-                            amount: String(Math.abs(parsedAmount)),
-                            description: parsedTxn.description,
-                            notes: parsedTxn.memo,
-                            reconciled: false,
-                            external_id: parsedTxn.transactionId,
-                            tags: [importTag],
-                            destination_id: parsedTxn.amount >= 0 ? String(selectedAccount.id) : undefined,
-                            source_id: parsedTxn.amount >= 0 ? undefined : String(selectedAccount.id),
-                        },
-                    ],
+                    group_title: parsedTxn.title,
+                    transactions: [],
                 };
+                // Add all the sub-transactions or just the main transaction
+                parsedTxn.transactions.forEach((pTxn) => {
+                    newTxn.transactions.push({
+                            type: pTxn.amount >= 0 ? TransactionTypeProperty.DEPOSIT : TransactionTypeProperty.WITHDRAWAL,
+                            date: pTxn.datePosted.format(),
+                            amount: String(Math.abs(pTxn.amount)),
+                            description: pTxn.description,
+                            notes: pTxn.memo,
+                            reconciled: false,
+                            external_id: pTxn.transactionId,
+                            tags: [importTag],
+                            destination_id: pTxn.amount >= 0 ? String(selectedAccount.id) : undefined,
+                            source_id: pTxn.amount >= 0 ? undefined : String(selectedAccount.id),
+                        })
+                });
 
                 let newTransaction;
                 // If proceed is still true, then we add the transaction
@@ -663,7 +669,11 @@ function App() {
                 console.log(' >>>>>> parsedTxn', parsedTxn);
                 if (transactions && transactions.length > 0) {
                     console.log('adding to existing transactions...');
-                    setTransactions([parsedTxn, ...transactions]);
+                    // Append (rather than prepend) so every row keeps a stable
+                    // array index — the list is displayed newest-first at render
+                    // time. Stable indices keep row keys/props stable so the
+                    // memoized rows don't remount/re-render on every step.
+                    setTransactions([...transactions, parsedTxn]);
                 } else {
                     console.log('setting new transaction...');
                     setTransactions([parsedTxn]);
@@ -693,13 +703,17 @@ function App() {
      */
     useEffect(() => {
         if (accounts && ofxData && selectedAccount && !processed) {
-            // If we have a selected account and new data, then start processing
+            // If we have a selected account and new data, then start processing.
+            // `processTransactions` gets a new identity on every render, so this
+            // effect re-runs constantly; clearing the timer on cleanup guarantees
+            // only one pending timeout exists at a time. Without this, each render
+            // leaked a setTimeout that retained the (growing) transactions array
+            // and kept firing re-renders, compounding across imports.
             console.log('Start processing...');
-            setTimeout(() => {
+            const timerId = setTimeout(() => {
                 processTransactions();
             }, 200);
-        } else if (transactions) {
-            console.log('transactions updated', transactions);
+            return () => clearTimeout(timerId);
         }
     }, [accounts, init, ofxData, processTransactions, processed, selectedAccount, transactions]);
 
@@ -1098,7 +1112,7 @@ function App() {
                                         </TableRow>
                                     </TableHead>
                                     <TableBody>
-                                        {transactions.map((transaction, idx) => (
+                                        {transactions.map((transaction, idx) => ({ transaction, idx })).reverse().map(({ transaction, idx }) => (
                                             <OfxTransactionsRow
                                                 key={`ofxRow_${idx}`}
                                                 transaction={transaction}

@@ -1,4 +1,4 @@
-import { Fragment, JSX, useCallback, useState } from "react";
+import { Fragment, JSX, memo, useCallback, useState } from "react";
 import { Alert, Button, Chip, CircularProgress, Stack, TableCell, TableRow, Tooltip, Typography } from "@mui/material";
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
@@ -119,12 +119,13 @@ const OfxTransactionsRow = (props: OfxTransactionsTableProps) => {
     }
 
     const canAddAnyway = props.transaction.importStatus?.status && ![OfxImportStatus.MATCH_EXACT, OfxImportStatus.SUCCESS].includes(props.transaction.importStatus?.status);
+    const txnAmount = props.transaction.transactions.reduce((txnSum, txn) => txnSum+parseFloat((txn.amount || 0).toFixed(2)), 0);
 
     return (
         <Fragment key={`ofxTxn_${props.index}_root`}>
             <TableRow>
                 <TableCell>
-                    {props.transaction.description}
+                    {props.transaction.title || props.transaction.transactions[0].description}
                     <Stack direction="row" sx={{paddingTop: '4px', alignItems: 'center', color: 'text.secondary'}} spacing={2}>
                         <Stack direction="row" sx={{alignItems: 'center'}} spacing={1}>
                             <Tooltip title="category" arrow placement="top">
@@ -142,13 +143,13 @@ const OfxTransactionsRow = (props: OfxTransactionsTableProps) => {
                     </Stack>
                 </TableCell>
                 <TableCell align="center">
-                    {props.transaction.datePosted.format('DD-MMM-YYYY')}
+                    {props.transaction.transactions[0].datePosted.format('DD-MMM-YYYY')}
                 </TableCell>
                 <TableCell align="center">
                     {getTransactionType(editable)}
                 </TableCell>
-                <TableCell align="right" sx={{ color: props.transaction.amount >= 0 ? 'success.main' : 'error.main', fontWeight: 500 }}>
-                    {utils.getLocaleCurrency(props.transaction.amount)}
+                <TableCell align="right" sx={{ color: txnAmount >= 0 ? 'success.main' : 'error.main', fontWeight: 500 }}>
+                    {utils.getLocaleCurrency(txnAmount)}
                 </TableCell>
                 <TableCell align="center">
                     <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}>
@@ -234,4 +235,6 @@ const OfxTransactionsRow = (props: OfxTransactionsTableProps) => {
     );
 };
 
-export default OfxTransactionsRow;
+// Memoized so that, during an import, appending a new row re-renders only that
+// new row instead of every already-rendered row (which was O(n²) overall).
+export default memo(OfxTransactionsRow);

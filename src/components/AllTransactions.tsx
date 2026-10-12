@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import {
     Alert,
     Autocomplete,
@@ -102,6 +102,98 @@ const accountLabel = (t: TransactionRead): string => {
     return s.source_name ?? '';
 };
 
+interface EditorMetadata {
+    accounts: AccountRead[];
+    categories: CategoryRead[];
+    budgets: BudgetRead[];
+    bills: BillRead[];
+    tags: string[];
+}
+
+interface RowProps {
+    transaction: TransactionRead;
+    isEditing: boolean;
+    metadata?: EditorMetadata;
+    onToggleEdit: (id: string) => void;
+    onSaved: (updated: TransactionRead) => void;
+    onDeleted: (id: string) => void;
+    onCancel: () => void;
+}
+
+// Memoized so that unrelated state changes in the parent (typing in the search
+// box, loading another page, another row entering edit mode) don't re-render
+// every already-rendered row. The parent must pass stable callbacks/metadata.
+const AllTransactionRow = memo(function AllTransactionRow({ transaction: t, isEditing, metadata, onToggleEdit, onSaved, onDeleted, onCancel }: RowProps) {
+    const amount = signedAmount(t);
+    const cats = categoryNames(t);
+    const tags = allTags(t).filter((tag) => tag.indexOf('OFX ') !== 0);
+    return (
+        <>
+            <TableRow>
+                <TableCell>
+                    {displayDescription(t)}
+                    <Stack direction="row" sx={{ pt: '4px', alignItems: 'center', color: 'text.secondary' }} spacing={2}>
+                        <Stack direction="row" sx={{ alignItems: 'center' }} spacing={1}>
+                            <CategoryOutlinedIcon fontSize={'small'} />
+                            <Typography sx={{ fontSize: '12px', color: cats.length ? 'text.secondary' : tokens.warning, fontStyle: cats.length ? 'normal' : 'italic' }}>
+                                {cats.length ? cats.join(', ') : 'Uncategorized'}
+                            </Typography>
+                        </Stack>
+                        {tags.length > 0 && (
+                            <Stack direction="row" sx={{ alignItems: 'center' }} spacing={1}>
+                                <SellOutlinedIcon fontSize={'small'} />
+                                {tags.map((tag, i) => (
+                                    <Chip key={`${t.id}_tag_${i}`} variant={'outlined'} label={tag} size={'small'} sx={{ color: 'text.secondary' }} />
+                                ))}
+                            </Stack>
+                        )}
+                    </Stack>
+                </TableCell>
+                <TableCell align="center">{moment(firstSplit(t)?.date).format('DD-MMM-YYYY')}</TableCell>
+                <TableCell align="center">{accountLabel(t)}</TableCell>
+                <TableCell align="center"><TransactionTypeIcon type={typeOf(t)} /></TableCell>
+                <TableCell align="right" sx={{ color: amount >= 0 ? 'success.main' : 'error.main', fontWeight: 500, whiteSpace: 'nowrap' }}>
+                    {utils.getLocaleCurrency(amount)}
+                </TableCell>
+                <TableCell align="center">
+                    <Button
+                        variant="outlined"
+                        size="small"
+                        onClick={() => onToggleEdit(t.id)}
+                        sx={{
+                            borderColor: 'divider',
+                            color: isEditing ? 'primary.light' : 'text.secondary',
+                            fontSize: '12px',
+                            backgroundColor: isEditing ? 'rgba(144,202,249,.08)' : undefined,
+                            '&:hover': { borderColor: 'primary.light', color: 'primary.light' },
+                        }}
+                    >
+                        <EditOutlinedIcon sx={{ fontSize: '14px', mr: 0.5 }} />
+                        {isEditing ? 'Editing…' : 'Edit'}
+                    </Button>
+                </TableCell>
+            </TableRow>
+            {isEditing && metadata && (
+                <TableRow>
+                    <TableCell colSpan={6} sx={{ p: 0, borderBottom: '1px solid', borderColor: 'divider' }}>
+                        <TransactionEditor
+                            transaction={t}
+                            accounts={metadata.accounts}
+                            categories={metadata.categories}
+                            budgets={metadata.budgets}
+                            bills={metadata.bills}
+                            tags={metadata.tags}
+                            onSaved={onSaved}
+                            onDeleted={() => onDeleted(t.id)}
+                            onCancel={onCancel}
+                        />
+                    </TableCell>
+                </TableRow>
+            )}
+        </>
+    );
+});
+
 const AllTransactions = (props: AllTransactionsProps) => {
     const [rows, setRows] = useState<TransactionRead[]>([]);
     const [page, setPage] = useState(0);
@@ -118,13 +210,7 @@ const AllTransactions = (props: AllTransactionsProps) => {
     const [search, setSearch] = useState('');
 
     const [editingId, setEditingId] = useState<string | undefined>();
-    const [editorMetadata, setEditorMetadata] = useState<{
-        accounts: AccountRead[];
-        categories: CategoryRead[];
-        budgets: BudgetRead[];
-        bills: BillRead[];
-        tags: string[];
-    }>();
+    const [editorMetadata, setEditorMetadata] = useState<EditorMetadata>();
     const [metadataLoading, setMetadataLoading] = useState(false);
 
     const scrollerRef = useRef<HTMLDivElement | null>(null);
@@ -227,10 +313,15 @@ const AllTransactions = (props: AllTransactionsProps) => {
         }
     }, [editorMetadata, metadataLoading]);
 
-    const handleStartEdit = useCallback((id: string) => {
-        setEditingId(id);
+    // Stable callbacks (no per-render identity change) so memoized rows are not
+    // forced to re-render. `setEditingId` uses a functional update to avoid a
+    // dependency on `editingId`.
+    const handleToggleEdit = useCallback((id: string) => {
         ensureEditorMetadata();
+        setEditingId((prev) => (prev === id ? undefined : id));
     }, [ensureEditorMetadata]);
+
+    const handleCancelEdit = useCallback(() => setEditingId(undefined), []);
 
     const handleSaved = useCallback((updated: TransactionRead) => {
         setRows((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
@@ -330,77 +421,18 @@ const AllTransactions = (props: AllTransactionsProps) => {
                         </TableRow>
                     </TableHead>
                     <TableBody>
-                        {rows.map((t) => {
-                            const amount = signedAmount(t);
-                            const cats = categoryNames(t);
-                            const tags = allTags(t).filter((tag) => tag.indexOf('OFX ') !== 0);
-                            const isEditing = editingId === t.id;
-                            return (
-                                <Fragment key={`txn_${t.id}`}>
-                                    <TableRow>
-                                        <TableCell>
-                                            {displayDescription(t)}
-                                            <Stack direction="row" sx={{ pt: '4px', alignItems: 'center', color: 'text.secondary' }} spacing={2}>
-                                                <Stack direction="row" sx={{ alignItems: 'center' }} spacing={1}>
-                                                    <CategoryOutlinedIcon fontSize={'small'} />
-                                                    <Typography sx={{ fontSize: '12px', color: cats.length ? 'text.secondary' : tokens.warning, fontStyle: cats.length ? 'normal' : 'italic' }}>
-                                                        {cats.length ? cats.join(', ') : 'Uncategorized'}
-                                                    </Typography>
-                                                </Stack>
-                                                {tags.length > 0 && (
-                                                    <Stack direction="row" sx={{ alignItems: 'center' }} spacing={1}>
-                                                        <SellOutlinedIcon fontSize={'small'} />
-                                                        {tags.map((tag, i) => (
-                                                            <Chip key={`${t.id}_tag_${i}`} variant={'outlined'} label={tag} size={'small'} sx={{ color: 'text.secondary' }} />
-                                                        ))}
-                                                    </Stack>
-                                                )}
-                                            </Stack>
-                                        </TableCell>
-                                        <TableCell align="center">{moment(firstSplit(t)?.date).format('DD-MMM-YYYY')}</TableCell>
-                                        <TableCell align="center">{accountLabel(t)}</TableCell>
-                                        <TableCell align="center"><TransactionTypeIcon type={typeOf(t)} /></TableCell>
-                                        <TableCell align="right" sx={{ color: amount >= 0 ? 'success.main' : 'error.main', fontWeight: 500, whiteSpace: 'nowrap' }}>
-                                            {utils.getLocaleCurrency(amount)}
-                                        </TableCell>
-                                        <TableCell align="center">
-                                            <Button
-                                                variant="outlined"
-                                                size="small"
-                                                onClick={() => isEditing ? setEditingId(undefined) : handleStartEdit(t.id)}
-                                                sx={{
-                                                    borderColor: 'divider',
-                                                    color: isEditing ? 'primary.light' : 'text.secondary',
-                                                    fontSize: '12px',
-                                                    backgroundColor: isEditing ? 'rgba(144,202,249,.08)' : undefined,
-                                                    '&:hover': { borderColor: 'primary.light', color: 'primary.light' },
-                                                }}
-                                            >
-                                                <EditOutlinedIcon sx={{ fontSize: '14px', mr: 0.5 }} />
-                                                {isEditing ? 'Editing…' : 'Edit'}
-                                            </Button>
-                                        </TableCell>
-                                    </TableRow>
-                                    {isEditing && editorMetadata && (
-                                        <TableRow>
-                                            <TableCell colSpan={6} sx={{ p: 0, borderBottom: '1px solid', borderColor: 'divider' }}>
-                                                <TransactionEditor
-                                                    transaction={t}
-                                                    accounts={editorMetadata.accounts}
-                                                    categories={editorMetadata.categories}
-                                                    budgets={editorMetadata.budgets}
-                                                    bills={editorMetadata.bills}
-                                                    tags={editorMetadata.tags}
-                                                    onSaved={handleSaved}
-                                                    onDeleted={() => handleDeleted(t.id)}
-                                                    onCancel={() => setEditingId(undefined)}
-                                                />
-                                            </TableCell>
-                                        </TableRow>
-                                    )}
-                                </Fragment>
-                            );
-                        })}
+                        {rows.map((t) => (
+                            <AllTransactionRow
+                                key={`txn_${t.id}`}
+                                transaction={t}
+                                isEditing={editingId === t.id}
+                                metadata={editorMetadata}
+                                onToggleEdit={handleToggleEdit}
+                                onSaved={handleSaved}
+                                onDeleted={handleDeleted}
+                                onCancel={handleCancelEdit}
+                            />
+                        ))}
                         {loading && (
                             <TableRow>
                                 <TableCell colSpan={6} align="center" sx={{ color: 'text.secondary', py: 2 }}>

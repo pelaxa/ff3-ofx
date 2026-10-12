@@ -50,13 +50,17 @@ export interface OfxData {
 // running-total match across split transactions" for display purposes.
 export type MatchedTransaction = TransactionRead & { totalMatch?: boolean };
 
-export interface OfxParsedTransaction {
+export interface OfxParsedSubTransaction {
     transactionType: string;
     datePosted: Moment;
     amount: number;
     transactionId: string;
     description: string;
     memo: string;
+}
+export interface OfxParsedTransaction {
+    title: string | null;
+    transactions: OfxParsedSubTransaction[]
     importStatus?: {
         status: OfxImportStatus;
         statusMessage?: string;

@@ -149,14 +149,35 @@ class Utils {
     static parseOfxTransaction(txn: OfxTransaction): OfxParsedTransaction | null {
         console.debug('TXN to parse', txn);
         if (txn) {
-        return {
-            transactionId: txn.FITID,
-            transactionType: txn.TRNTYPE,
-            datePosted: Utils.ofxDateToFF3(txn.DTPOSTED),
-            amount: parseFloat(txn.TRNAMT),
-            description: txn.NAME,
-            memo: txn.MEMO,
-        };
+            if (!Array.isArray(txn.FITID)) {
+                return {
+                    title: null,
+                    transactions: [{
+                        transactionId: txn.FITID,
+                        transactionType: txn.TRNTYPE,
+                        datePosted: Utils.ofxDateToFF3(txn.DTPOSTED),
+                        amount: parseFloat(txn.TRNAMT),
+                        description: txn.NAME,
+                        memo: txn.MEMO,
+                    }]
+                };
+            } else {
+                const subTxns = [];
+                for (let i=0; i < txn.FITID.length; i++) {
+                    subTxns.push({
+                        transactionId: txn.FITID[i],
+                        transactionType: txn.TRNTYPE[i],
+                        datePosted: Utils.ofxDateToFF3(txn.DTPOSTED[i]),
+                        amount: parseFloat(txn.TRNAMT[i]),
+                        description: txn.NAME[i],
+                        memo: txn.MEMO[i],
+                    })
+                }
+                return {
+                    title: txn.NAME[0],
+                    transactions: subTxns
+                };
+            }
         }
 
         return null;
