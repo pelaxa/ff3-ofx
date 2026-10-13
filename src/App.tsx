@@ -3,28 +3,28 @@ import ApiService from '@/lib/apiService';
 import Utils from '@/lib/utils';
 import moment from 'moment';
 import '@/App.css';
-import { FF3NewAccount, MatchedTransaction, OfxAccountStatus, OfxData, OfxImportStatus, OfxParsedTransaction } from '@/lib/interfaces';
+import { FF3NewAccount, OfxAccountStatus, OfxData, OfxImportStatus, OfxParsedTransaction } from '@/lib/interfaces';
 import {
     AccountRoleProperty,
-    TransactionTypeProperty,
     type AccountRead,
-    type BillRead,
-    type BudgetRead,
-    type CategoryRead,
     type TransactionRead,
-    type TransactionStoreWritable,
-    type ValidationErrorResponse,
 } from '@billos/firefly-iii-sdk';
 import Button from '@mui/material/Button';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import CheckIcon from '@mui/icons-material/Check';
 import CloseIcon from '@mui/icons-material/Close';
-import { Alert, AppBar, Box, Card, CardContent, Checkbox, Collapse, FormControl, FormControlLabel, IconButton, InputLabel, MenuItem, Paper, Select, SelectChangeEvent, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Toolbar, Typography } from '@mui/material';
-import * as OFXParser from 'node-ofx-parser';
+import { Alert, AppBar, Box, Card, CardContent, Checkbox, Collapse, FormControl, FormControlLabel, IconButton, InputLabel, MenuItem, Paper, Select, SelectChangeEvent, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, ToggleButton, ToggleButtonGroup, Toolbar, Tooltip, Typography } from '@mui/material';
+import { parseStrict as parseOFX } from 'ofx-js';
 import Summary from '@/components/Summary';
 import OfxTransactionsRow from '@/components/OfxTransactionsRow';
 import FileDrop from '@/components/FileDrop';
 import OfxSummary from '@/components/OfxSummary';
+import AllTransactions from '@/components/AllTransactions';
+import { useEditorMetadata } from '@/lib/useEditorMetadata';
+import { useSession } from '@/lib/useSession';
+import { addNewTransaction, importParsedTransaction } from '@/lib/statementImport';
+
+type AppTab = 'import' | 'all';
 
 // Import tag used to identify the import
 const importTag = `OFX Import ${moment().format('YYYY-MM-DD HH:mm:ss')}`;
@@ -54,14 +54,9 @@ const ERROR_NEW_ACCOUNT_FAILED = 'Could not create a new account. Please create 
 const ERROR_NO_TRANSACTIONS = 'The OFX file does not contain any transactions';
 const ERROR_BAD_OFX = 'The OFX file format is not understood';
 
-interface Token {
-    value: string;
-};
-
 function App() {
-    const [token, setToken] = useState<Token>();
-    // List of all accounts
-    const [accounts, setAccounts] = useState<AccountRead[]>();
+    // Which top-level tab is active. Import is the default and shown first.
+    const [activeTab, setActiveTab] = useState<AppTab>('import');
     // The selected account for which transactions are being processed
     const [selectedAccount, setSelectedAccount] = useState<AccountRead>();
     // The selected account for which transactions are being processed
@@ -91,14 +86,12 @@ function App() {
     // Index (within `transactions`) of the row currently being edited; undefined when none
     const [editingTxnIdx, setEditingTxnIdx] = useState<number | undefined>();
     // Lazy-loaded metadata for the autocomplete fields in the editor
-    const [editorMetadata, setEditorMetadata] = useState<{
-        accounts: AccountRead[];
-        categories: CategoryRead[];
-        budgets: BudgetRead[];
-        bills: BillRead[];
-        tags: string[];
-    }>();
-    const [metadataLoading, setMetadataLoading] = useState(false);
+    const { editorMetadata, ensureEditorMetadata, mergeSavedTransaction } = useEditorMetadata();
+
+    // Login lifecycle: the token, the accounts fetched with it, and login/logout
+    const { token, accounts, login, refreshAccounts, logout } = useSession(setErrorMessage);
+    // Whether the user ticked "Remember token for next time" on the login form
+    const [rememberToken, setRememberToken] = useState(false);
 
     const checkForUpdates = useCallback(async () => {
         const myVersion = `${__APP_VERSION__}`;
@@ -108,44 +101,6 @@ function App() {
             setUpdateAvailable(true);
         }
     }, []);
-
-    /**
-     * Fetch the list of accounts
-     */
-    const init = useCallback(async (currentToken?: Token) => {
-        console.debug('fetching accounts...');
-        ApiService.getAccounts(currentToken?.value).then(accntResponse => {
-            console.log('accntResponse', accntResponse);
-            if (accntResponse && accntResponse.length >= 0) {
-                setErrorMessage(undefined);
-                setAccounts(accntResponse);
-                // If we got accounts back, then store the token
-                if (currentToken && currentToken.value) {
-                    if ((document.getElementById('chkStoreToken') as HTMLInputElement)?.checked) { // Only store the token if user requested
-                        localStorage.setItem('token', JSON.stringify(currentToken));
-                    }
-                    setToken(currentToken);
-                }
-            } else if (accntResponse === null) {  // If the response is null, that means we got an unauthorized response
-                if (currentToken && (!token || !token.value)) {
-                    setToken(undefined);
-                }
-                ApiService.reset();
-            }
-        }).catch(e => {
-            console.error('could not get accounts', e);
-            if (currentToken && currentToken.value?.length > 0) {
-                // localStorage.removeItem('token');
-                ApiService.reset();
-                setToken(undefined);
-                // Set the error on timeout to allow the page to render
-                // setTimeout(() => {
-                console.log("setting error");
-                setErrorMessage(e.message);
-                // }, 5000); 
-            }
-        });
-    }, [token]);
 
     const processAccount = useCallback(async (accountOfxData?: OfxData) => {
         if (!accountOfxData && !ofxData) {
@@ -269,7 +224,7 @@ function App() {
             const reader = new FileReader();
             reader.onload = (e: ProgressEvent<FileReader>) => {
                 console.debug('file content', e);
-                const parsedData = OFXParser.parse(e.target?.result);
+                const parsedData = parseOFX(e.target?.result as string);
                 // console.debug(parsedData);
                 try {
                     const tmpOfxData = Utils.getOfxData(parsedData);
@@ -314,7 +269,7 @@ function App() {
                 setProcessed(false);
                 setSelectedAccount(accnt);
                 setMatchingAccounts(undefined);
-                setAccounts(undefined);
+                refreshAccounts();
                 setErrorMessage(undefined);
                 return;
             } 
@@ -325,64 +280,22 @@ function App() {
     }
 
 
-    // This method adds a new transaction to the Firefly account based on user request
-    const addAnyways = async (existingTxn: OfxParsedTransaction) => {
+    // This method adds a new transaction to the Firefly account based on user request.
+    // Uses functional state updates and has no changing dependencies so its identity
+    // is stable — this keeps the memoized OfxTransactionsRow from re-rendering.
+    const addAnyways = useCallback(async (existingTxn: OfxParsedTransaction) => {
         if (existingTxn.importStatus?.ff3Txn2Import) {
-            const newTransaction = await addTransaction(existingTxn.importStatus?.ff3Txn2Import);
+            const newTransaction = await addNewTransaction(ApiService, existingTxn.importStatus?.ff3Txn2Import);
 
             if (newTransaction) {
                 existingTxn.importStatus = newTransaction;
                 console.log('Added new transaction (anyways) successfully', newTransaction);
-                setTransactions([...transactions]);
+                setTransactions((prev) => [...prev]);
                 // Change progress so that the summary also updates
-                setProgress(progress + 1);
+                setProgress((p) => p + 1);
             }
         }
-    };
-
-    // This method adds a new transaction to the Firefly account
-    const addTransaction = useCallback(async (newTxn: TransactionStoreWritable): Promise<OfxParsedTransaction["importStatus"]> => {
-        console.log('Adding new transaction', newTxn);
-        let newTransaction: OfxParsedTransaction["importStatus"];
-        const newTransactionResp = await ApiService.addTransaction(newTxn);
-
-        if (newTransactionResp && !(newTransactionResp as ValidationErrorResponse).message) {
-            console.log('Added new transaction successfully', newTransactionResp);
-            newTransaction = {
-                status: OfxImportStatus.SUCCESS,
-                ff3TxnImported: newTransactionResp as TransactionRead,
-            };
-        } else {
-            console.log('New transaction failed', newTransactionResp);
-            const err = newTransactionResp as ValidationErrorResponse;
-            newTransaction = {
-                status: OfxImportStatus.FAILURE,
-                statusMessage: err.message,
-                statusError: err.errors,
-                ff3Txn2Import: newTxn,
-            };
-        }
-        return newTransaction;
     }, []);
-
-    const ensureEditorMetadata = useCallback(async () => {
-        if (editorMetadata || metadataLoading) return;
-        setMetadataLoading(true);
-        try {
-            const [allAccounts, categories, budgets, bills, tags] = await Promise.all([
-                ApiService.listAllAccounts(),
-                ApiService.listCategories(),
-                ApiService.listBudgets(),
-                ApiService.listBills(),
-                ApiService.listTags(),
-            ]);
-            setEditorMetadata({ accounts: allAccounts, categories, budgets, bills, tags });
-        } catch (e) {
-            console.error('Failed to load editor metadata', e);
-        } finally {
-            setMetadataLoading(false);
-        }
-    }, [editorMetadata, metadataLoading]);
 
     const handleStartEdit = useCallback((idx: number) => {
         setEditingTxnIdx(idx);
@@ -411,86 +324,14 @@ function App() {
                 },
             };
         }));
-        // Merge any newly-created categories/budgets/bills/tags/accounts that FF3
-        // auto-resolved from *_name fields into the cached editor metadata, so the
-        // next edit's autocompletes show them without a refetch.
-        setEditorMetadata((meta) => {
-            if (!meta) return meta;
-            const knownCat = new Set(meta.categories.map((c) => c.attributes.name));
-            const knownBud = new Set(meta.budgets.map((b) => b.attributes.name));
-            const knownBill = new Set(meta.bills.map((b) => b.attributes.name).filter((n): n is string => !!n));
-            const knownTag = new Set(meta.tags);
-            const knownAccount = new Set(meta.accounts.map((a) => `${a.id}|${a.attributes.name}`));
-            const newCats: CategoryRead[] = [];
-            const newBuds: BudgetRead[] = [];
-            const newBills: BillRead[] = [];
-            const newTags: string[] = [];
-            const newAccounts: AccountRead[] = [];
-            for (const s of updated.attributes.transactions) {
-                if (s.category_name && !knownCat.has(s.category_name)) {
-                    newCats.push({ type: 'categories', id: s.category_id ?? '', attributes: { name: s.category_name } } as CategoryRead);
-                    knownCat.add(s.category_name);
-                }
-                if (s.budget_name && !knownBud.has(s.budget_name)) {
-                    newBuds.push({ type: 'budgets', id: s.budget_id ?? '', attributes: { name: s.budget_name } } as BudgetRead);
-                    knownBud.add(s.budget_name);
-                }
-                if (s.bill_name && !knownBill.has(s.bill_name)) {
-                    newBills.push({ type: 'bills', id: s.bill_id ?? '', attributes: { name: s.bill_name } } as BillRead);
-                    knownBill.add(s.bill_name);
-                }
-                for (const tag of s.tags ?? []) {
-                    if (!knownTag.has(tag)) {
-                        newTags.push(tag);
-                        knownTag.add(tag);
-                    }
-                }
-                // FF3 may have auto-created expense/revenue accounts from the typed names.
-                // Synthesize records using the resolved ids so the next edit's account
-                // dropdown contains them. Type is inferred from the side that's
-                // typically auto-created for each transaction type.
-                if (s.source_name && s.source_id) {
-                    const key = `${s.source_id}|${s.source_name}`;
-                    if (!knownAccount.has(key)) {
-                        newAccounts.push({
-                            type: 'accounts',
-                            id: s.source_id,
-                            attributes: { name: s.source_name, type: (s.source_type ?? 'asset') as never },
-                        } as AccountRead);
-                        knownAccount.add(key);
-                    }
-                }
-                if (s.destination_name && s.destination_id) {
-                    const key = `${s.destination_id}|${s.destination_name}`;
-                    if (!knownAccount.has(key)) {
-                        newAccounts.push({
-                            type: 'accounts',
-                            id: s.destination_id,
-                            attributes: { name: s.destination_name, type: (s.destination_type ?? 'asset') as never },
-                        } as AccountRead);
-                        knownAccount.add(key);
-                    }
-                }
-            }
-            if (!newCats.length && !newBuds.length && !newBills.length && !newTags.length && !newAccounts.length) {
-                return meta;
-            }
-            return {
-                accounts: newAccounts.length ? [...meta.accounts, ...newAccounts] : meta.accounts,
-                categories: newCats.length ? [...meta.categories, ...newCats] : meta.categories,
-                budgets: newBuds.length ? [...meta.budgets, ...newBuds] : meta.budgets,
-                bills: newBills.length ? [...meta.bills, ...newBills] : meta.bills,
-                tags: newTags.length ? [...meta.tags, ...newTags] : meta.tags,
-            };
-        });
+        // Fold anything FF3 created while saving (new category, tag, account...) into the autocomplete data
+        mergeSavedTransaction(updated);
         setEditingTxnIdx(undefined);
-    }, []);
+    }, [mergeSavedTransaction]);
 
     const handleEditDeleted = useCallback((idx: number) => {
         setTransactions((prev) => prev.map((t, i) => {
             if (i !== idx || !t.importStatus) return t;
-            // Update the progress to make sure summary is also updated
-            setProgress(progress +1);
             return {
                 ...t,
                 importStatus: {
@@ -503,8 +344,11 @@ function App() {
                 },
             };
         }));
+        // Bump progress so the Summary recomputes. Functional update keeps this
+        // callback's identity stable (no `progress` dependency).
+        setProgress((p) => p + 1);
         setEditingTxnIdx(undefined);
-    }, [progress]);
+    }, []);
 
     const processTransactions = useCallback(async () => {
         // Process each transaction by
@@ -526,139 +370,19 @@ function App() {
             const parsedTxn = ofxData.accounts[ofxAccountIndex].transactions[transactions.length];
 
             if (parsedTxn) {
-                // We do this to make sure we only have 2 digit decimals
-                const parsedAmount = parsedTxn.amount ? parseFloat(parsedTxn.amount.toFixed(2)) : 0;
+                console.log('Processing OFX transaction', parsedTxn.title || parsedTxn.transactions[0].description, parsedTxn);
 
-                console.log('Processing OFX transaction', parsedTxn.description, parsedTxn);
-
-                const relatedTransactions = await ApiService.getAccountTransactions(
-                    selectedAccount.id,
-                    moment(parsedTxn.datePosted).add(-3, 'days'),
-                    moment(parsedTxn.datePosted).add(3, 'days'),
-                ),
-                    matchingTransactions: MatchedTransaction[] = [];
-                let proceed = true,
-                    exactMatchFound = false;
-
-                if (relatedTransactions && relatedTransactions.length >= 1) {
-                    console.log(`Found ${relatedTransactions.length} related transactions`);
-                    // Check to see if we have added this transaction already
-                    for (const ffTxn of relatedTransactions) {
-                        // The running total is used to match on split transactions
-                        let runningTotal = 0;
-                        for (const txn of ffTxn.attributes.transactions) {
-                            // This strange conversion is done because FF sometimes stored the value with more decimal precision so the
-                            // amount do not match exactly.  eg. 57.66 vs 57.65999999
-                            const txnAmount = txn.amount ? parseFloat(parseFloat(txn.amount).toFixed(2)) : 0;
-                            console.log('***** Examining txn:');
-                            console.log('    **** ffAmount:', txnAmount, ' <==> Bank Amount:', parsedAmount);
-                            console.log('    **** ffExtId:', txn.external_id, 'ffIntId:', txn.internal_reference, ' <==> Bank ID:', parsedTxn.transactionId);
-                            console.log('    **** ffSourceAccount:', txn.source_id, ', ffDestinationAccount:', txn.destination_id, ' <==> Bank Account:', selectedAccount.id);
-                            // First we check for an exact match based on internal or external id.
-                            // parsedTxn.transactionId should be unique but it is not in all cases, 
-                            // so we check that and the amount
-                            if ((
-                                (txn.internal_reference && txn.internal_reference === parsedTxn.transactionId) ||
-                                (txn.external_id && txn.external_id === parsedTxn.transactionId)
-                            ) && Math.abs(txnAmount || 0) === Math.abs(parsedAmount || 0)) {
-                                proceed = false;
-                                exactMatchFound = true;
-                                matchingTransactions.push(ffTxn);
-                                console.log('********** Found EXACT match');
-                                break;
-                            } else if (txnAmount) {
-                                runningTotal += txnAmount;
-                                if (txnAmount === Math.abs(parsedAmount)) {
-                                    // amountMatchFound = true;
-                                    if (
-                                        (parsedTxn.amount < 0 && txn.source_id === selectedAccount.id) ||
-                                        (parsedTxn.amount >= 0 && txn.destination_id === selectedAccount.id)
-                                    ) {
-                                        console.log('********** Found AMOUNT match');
-                                        // console.info(
-                                        //     '********** Found AMOUNT match, parsedTxn.amount',
-                                        //     parsedAmount,
-                                        //     'Source match: ',
-                                        //     txn.source_id === selectedAccount.id,
-                                        //     'Dest match: ',
-                                        //     txn.destination_id === selectedAccount.id,
-                                        // );
-
-                                        matchingTransactions.push(ffTxn);
-                                        // If the description also matches, then it is an exact match
-                                        if (parsedTxn.description === txn.description) {
-                                            console.log('********** Found AMOUNT.EXACT match');
-                                            exactMatchFound = false;
-                                            proceed = false;
-                                            break;
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        // It is possible the transaction was split so check to make sure we have more than 1 transaction
-                        // and the total matches and only add it if it is not already in the array
-                        if (
-                            ffTxn.attributes.transactions.length > 1 && parseFloat(runningTotal.toFixed(2)) === Math.abs(parsedAmount) &&
-                            !matchingTransactions.includes(ffTxn)
-                        ) {
-                            console.log('********** Found TOTAL match');
-                            const matched: MatchedTransaction = ffTxn;
-                            matched.totalMatch = true; // Lets set a custom property so we can display this differently in matched transactions
-                            matchingTransactions.push(matched);
-                            // proceed = false;
-                        }
-                        if (exactMatchFound) {
-                            break;
-                        }
-                    }
-                }
-
-                const newTxn: TransactionStoreWritable = {
-                    error_if_duplicate_hash: true,
-                    apply_rules: true,
-                    group_title: null,
-                    transactions: [
-                        {
-                            type: parsedTxn.amount >= 0 ? TransactionTypeProperty.DEPOSIT : TransactionTypeProperty.WITHDRAWAL,
-                            date: parsedTxn.datePosted.format(),
-                            amount: String(Math.abs(parsedAmount)),
-                            description: parsedTxn.description,
-                            notes: parsedTxn.memo,
-                            reconciled: false,
-                            external_id: parsedTxn.transactionId,
-                            tags: [importTag],
-                            destination_id: parsedTxn.amount >= 0 ? String(selectedAccount.id) : undefined,
-                            source_id: parsedTxn.amount >= 0 ? undefined : String(selectedAccount.id),
-                        },
-                    ],
-                };
-
-                let newTransaction;
-                // If proceed is still true, then we add the transaction
-                if (proceed && matchingTransactions.length === 0) {
-                    console.log(' >>>>>> Adding new transaction', newTxn);
-                    newTransaction = await addTransaction(newTxn);
-                }
-
-                if (newTransaction) {
-                    console.log(' >>>>>> Added new transaction');
-                    parsedTxn.importStatus = newTransaction;
-                } else {
-                    console.log(' >>>>>> Transaction already existed');
-                    parsedTxn.importStatus = {
-                        status: exactMatchFound ? OfxImportStatus.MATCH_EXACT : OfxImportStatus.MATCH_VALUE,
-                        matchingTransactions: matchingTransactions,
-                        ff3Txn2Import: newTxn,
-                    };
-                }
+                parsedTxn.importStatus = await importParsedTransaction(ApiService, parsedTxn, selectedAccount.id, importTag);
 
                 console.log(' >>>>>> transactions', transactions);
                 console.log(' >>>>>> parsedTxn', parsedTxn);
                 if (transactions && transactions.length > 0) {
                     console.log('adding to existing transactions...');
-                    setTransactions([parsedTxn, ...transactions]);
+                    // Append (rather than prepend) so every row keeps a stable
+                    // array index — the list is displayed newest-first at render
+                    // time. Stable indices keep row keys/props stable so the
+                    // memoized rows don't remount/re-render on every step.
+                    setTransactions([...transactions, parsedTxn]);
                 } else {
                     console.log('setting new transaction...');
                     setTransactions([parsedTxn]);
@@ -681,39 +405,26 @@ function App() {
             setProcessed(true);
             console.log('Processed Transactions', progress, transactions);
         }
-    }, [ofxData, transactions, ofxAccountIndex, selectedAccount, progress, addTransaction]);
+    }, [ofxData, transactions, ofxAccountIndex, selectedAccount, progress]);
 
     /**
      * Start processing transactions when proper state is set.
      */
     useEffect(() => {
         if (accounts && ofxData && selectedAccount && !processed) {
-            // If we have a selected account and new data, then start processing
+            // If we have a selected account and new data, then start processing.
+            // `processTransactions` gets a new identity on every render, so this
+            // effect re-runs constantly; clearing the timer on cleanup guarantees
+            // only one pending timeout exists at a time. Without this, each render
+            // leaked a setTimeout that retained the (growing) transactions array
+            // and kept firing re-renders, compounding across imports.
             console.log('Start processing...');
-            setTimeout(() => {
+            const timerId = setTimeout(() => {
                 processTransactions();
             }, 200);
-        } else if (transactions) {
-            console.log('transactions updated', transactions);
+            return () => clearTimeout(timerId);
         }
-    }, [accounts, init, ofxData, processTransactions, processed, selectedAccount, transactions]);
-
-    /**
-     * Read the token anytime the screen is refreshed.
-     */
-    useEffect(() => {
-        // console.log('localStorage.getItem(\'token\')', (localStorage.getItem('token') ?? null));
-        const localToken = JSON.parse(localStorage.getItem('token') || '{}');
-        if (localToken && localToken.value) {
-            console.debug('Found local token!  Fetching accounts...');
-            // initialize the http client
-            if (!accounts) {
-                console.debug('Fetching accounts(localToken)...');
-                ApiService.getHttp(localToken.value);
-                init(localToken);
-            }
-        }
-    }, [accounts, init]);
+    }, [accounts, ofxData, processTransactions, processed, selectedAccount, transactions]);
 
     useEffect(() => {
         checkForUpdates();
@@ -739,55 +450,111 @@ function App() {
 
     // console.debug('Account role:', newAccountData?.role);
 
-    const activeStep = !token ? 0
-        : (showFileDrop && !processed && transactions.length === 0) ? 1
-        : !processed ? 2
-        : 3;
+    // Login is now a gate in front of both tabs, so the import stepper only
+    // tracks Import → Processing → Done.
+    const activeStep = (showFileDrop && !processed && transactions.length === 0) ? 0
+        : !processed ? 1
+        : 2;
 
     return (
         <div className="App">
             <AppBar position="sticky">
                 <Toolbar>
-                    <Typography variant="h6" sx={{ flex: 1, fontWeight: 700 }}>
+                    <Typography variant="h6" sx={{ fontWeight: 700 }}>
                         ff3<Box component="span" sx={{ color: 'primary.light' }}>-ofx</Box>
                     </Typography>
-                    <Box component="span" sx={{ mr: 2, px: 1, py: '2px', background: 'rgba(255,255,255,.1)', borderRadius: '10px', fontSize: '11px', color: 'primary.light', fontWeight: 500 }}>
-                        v{__APP_VERSION__}
-                    </Box>
+                    <Box sx={{ flex: 1 }} />
+                    {token && (
+                        <ToggleButtonGroup
+                            exclusive
+                            size="small"
+                            value={activeTab}
+                            onChange={(_, value: AppTab | null) => { if (value) setActiveTab(value); }}
+                            sx={{
+                                backgroundColor: 'rgba(255,255,255,.08)',
+                                '& .MuiToggleButton-root': {
+                                    color: 'rgba(255,255,255,.85)',
+                                    border: '1px solid rgba(255,255,255,.35)',
+                                    fontWeight: 600,
+                                    px: 2.2,
+                                    textTransform: 'none',
+                                    '&.Mui-selected': { backgroundColor: '#fff', color: 'primary.main', '&:hover': { backgroundColor: '#fff' } },
+                                    '&:hover': { backgroundColor: 'rgba(255,255,255,.18)' },
+                                },
+                            }}
+                        >
+                            <ToggleButton value="import">Import</ToggleButton>
+                            <ToggleButton value="all">All Transactions</ToggleButton>
+                        </ToggleButtonGroup>
+                    )}
+                    <Box sx={{ flex: 1 }} />
+                    <Tooltip
+                        arrow
+                        placement="bottom"
+                        title={updateAvailable ? (
+                            <Box sx={{ fontSize: '12px', lineHeight: 1.5, p: '2px' }}>
+                                A new version of <b>{__APP_NAME__}</b> is available.<br />
+                                You are running <b>v{__APP_VERSION__}</b>.{' '}
+                                <Box component="a" href="https://github.com/pelaxa/ff3-ofx/releases/latest" target="_new" sx={{ color: 'primary.light', fontWeight: 600 }}>
+                                    Get the latest release
+                                </Box>.
+                            </Box>
+                        ) : ''}
+                    >
+                        <Box
+                            component="span"
+                            onClick={updateAvailable ? () => window.open('https://github.com/pelaxa/ff3-ofx/releases/latest', '_new') : undefined}
+                            sx={{
+                                mr: 2, px: 1, py: '2px', borderRadius: '10px', fontSize: '11px',
+                                color: 'primary.light', fontWeight: 500,
+                                background: updateAvailable ? 'rgba(144,202,249,.25)' : 'rgba(255,255,255,.1)',
+                                cursor: updateAvailable ? 'pointer' : 'default',
+                                display: 'inline-flex', alignItems: 'center', gap: '4px',
+                                '@keyframes versionPulse': {
+                                    '0%':   { boxShadow: '0 0 0 0 rgba(144,202,249,.55)' },
+                                    '70%':  { boxShadow: '0 0 0 7px rgba(144,202,249,0)' },
+                                    '100%': { boxShadow: '0 0 0 0 rgba(144,202,249,0)' },
+                                },
+                                animation: updateAvailable ? 'versionPulse 1.8s ease-out infinite' : 'none',
+                            }}
+                        >
+                            v{__APP_VERSION__}{updateAvailable ? ' •' : ''}
+                        </Box>
+                    </Tooltip>
                     {token && (
                         <Button
                             color="inherit"
                             size="small"
                             startIcon={<RefreshIcon />}
-                            onClick={() => { localStorage.removeItem('token'); window.location.reload(); }}
+                            onClick={logout}
                         >
                             Reset Token
                         </Button>
                     )}
                 </Toolbar>
             </AppBar>
-            {updateAvailable && (
-                <Alert variant="outlined" severity="info">
-                    You are currently running <b>{__APP_NAME__}</b> version <b>{__APP_VERSION__}</b>.  There is a new version available <a href="https://github.com/pelaxa/ff3-ofx/releases/latest" target="_new">here</a>.
-                </Alert>
-            )}
             <div className="App-header">
-                <Box sx={{ display: 'flex', backgroundColor: 'background.paper', border: '1px solid', borderColor: 'divider', borderRadius: '6px', p: '4px', width: 700 }}>
-                    {(['Login', 'Import', 'Processing', 'Done'] as const).map((label, idx) => (
-                        <Box key={label} sx={{
-                            flex: 1, py: '8px', textAlign: 'center', borderRadius: '4px',
-                            fontSize: '12px', fontWeight: 500, userSelect: 'none',
-                            color: activeStep === idx ? '#fff' : 'text.secondary',
-                            backgroundColor: activeStep === idx ? 'primary.main' : 'transparent',
-                            transition: 'all .15s',
-                        }}>
-                            {idx + 1} · {label}
-                        </Box>
-                    ))}
-                </Box>
-                <Collapse in={!!errorMessage} unmountOnExit>
+                <Collapse in={!!errorMessage} unmountOnExit sx={{ flexShrink: 0 }}>
                     <Alert severity="error" action={<IconButton size="small" onClick={() => { setErrorMessage(undefined); }}><CloseIcon /></IconButton>}>{errorMessage}</Alert>
                 </Collapse>
+                {!!token && activeTab === 'all' && (
+                    <AllTransactions accounts={accounts} />
+                )}
+                {!!token && activeTab === 'import' && (
+                    <Box sx={{ display: 'flex', backgroundColor: 'background.paper', border: '1px solid', borderColor: 'divider', borderRadius: '6px', p: '4px', width: 560, flexShrink: 0 }}>
+                        {(['Import', 'Processing', 'Done'] as const).map((label, idx) => (
+                            <Box key={label} sx={{
+                                flex: 1, py: '8px', textAlign: 'center', borderRadius: '4px',
+                                fontSize: '12px', fontWeight: 500, userSelect: 'none',
+                                color: activeStep === idx ? '#fff' : 'text.secondary',
+                                backgroundColor: activeStep === idx ? 'primary.main' : 'transparent',
+                                transition: 'all .15s',
+                            }}>
+                                {idx + 1} · {label}
+                            </Box>
+                        ))}
+                    </Box>
+                )}
                 <Collapse in={!token} unmountOnExit>
                     <Card sx={{ width: 500 }}>
                         <CardContent sx={{ p: 3 }}>
@@ -818,16 +585,16 @@ function App() {
                             />
                             <FormControlLabel
                                 sx={{ mt: 1, mb: 2, display: 'block' }}
-                                control={<Checkbox id={'chkStoreToken'} />}
+                                control={<Checkbox id={'chkStoreToken'} checked={rememberToken} onChange={(event) => setRememberToken(event.target.checked)} />}
                                 label="Remember token for next time"
                             />
-                            <Button fullWidth variant="contained" disabled={loginDisabled} onClick={() => init({ value: tokenInput.trim() })}>
+                            <Button fullWidth variant="contained" disabled={loginDisabled} onClick={() => login({ value: tokenInput.trim() }, rememberToken)}>
                                 Login
                             </Button>
                         </CardContent>
                     </Card>
                 </Collapse>
-                <Collapse in={!!token && showFileDrop}  unmountOnExit>
+                <Collapse in={!!token && activeTab === 'import' && showFileDrop}  unmountOnExit>
                     <Card sx={{ width: 560 }}>
                         <CardContent sx={{ p: 3 }}>
                             <Typography variant='subtitle2' sx={{ mb: 2, textTransform: 'uppercase', letterSpacing: '0.8px', color: 'primary.light' }}>
@@ -837,10 +604,10 @@ function App() {
                         </CardContent>
                     </Card>
                 </Collapse>
-                <Collapse in={ofxData && ofxData?.accounts.length > 1}  unmountOnExit>
+                <Collapse in={activeTab === 'import' && ofxData && ofxData?.accounts.length > 1}  unmountOnExit>
                     <OfxSummary accounts={ofxData?.accounts || []} clickHandler={handleNextAccount} selectionAllowed={processed}/>
                 </Collapse>
-                <Collapse in={!!token && !showFileDrop && !!matchingAccounts && matchingAccounts.length > 1}  unmountOnExit>
+                <Collapse in={!!token && activeTab === 'import' && !showFileDrop && !!matchingAccounts && matchingAccounts.length > 1}  unmountOnExit>
                     <Card sx={{ width: 720 }}>
                         <CardContent sx={{ p: 3 }}>
                             <Typography variant='subtitle2' sx={{ mb: 1, textTransform: 'uppercase', letterSpacing: '0.8px', color: 'primary.light' }}>
@@ -919,7 +686,7 @@ function App() {
                         </CardContent>
                     </Card>
                 </Collapse>
-                <Collapse in={!!token && !showFileDrop && !!newAccountData}  unmountOnExit>
+                <Collapse in={!!token && activeTab === 'import' && !showFileDrop && !!newAccountData}  unmountOnExit>
                     <Card sx={{ width: 560 }}>
                         <CardContent sx={{ p: 3 }}>
                             <Typography variant='subtitle2' sx={{ mb: 1, textTransform: 'uppercase', letterSpacing: '0.8px', color: 'primary.light' }}>
@@ -1001,7 +768,7 @@ function App() {
                         </CardContent>
                     </Card>
                 </Collapse>
-                {transactions && transactions.length > 0 && (
+                {activeTab === 'import' && transactions && transactions.length > 0 && (
                     <>
                         <Summary bankBalance={bankBalance} accountId={selectedAccount?.id} processed={processed} progress={progress} />
                         {processed && (
@@ -1013,6 +780,7 @@ function App() {
                                 borderColor: 'divider',
                                 borderRadius: 2,
                                 gap: 2,
+                                flexShrink: 0,
                             }}>
                                 <Box>
                                     <Typography variant="subtitle2">Import another file?</Typography>
@@ -1022,8 +790,8 @@ function App() {
                                 </Button>
                             </Box>
                         )}
-                        <div className="scrollView" >
-                            <TableContainer component={Paper}>
+                        <Box className="scrollView" sx={{ flex: 1, minHeight: 0, display: 'flex' }}>
+                            <TableContainer component={Paper} sx={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
                                 <Table stickyHeader aria-label="collapsible sticky table">
                                     <TableHead>
                                         <TableRow className="Header-Row">
@@ -1036,7 +804,7 @@ function App() {
                                         </TableRow>
                                     </TableHead>
                                     <TableBody>
-                                        {transactions.map((transaction, idx) => (
+                                        {transactions.map((transaction, idx) => ({ transaction, idx })).reverse().map(({ transaction, idx }) => (
                                             <OfxTransactionsRow
                                                 key={`ofxRow_${idx}`}
                                                 transaction={transaction}
@@ -1057,7 +825,7 @@ function App() {
                                     </TableBody>
                                 </Table>
                             </TableContainer>
-                        </div>
+                        </Box>
                     </>
                 )}
             </div>

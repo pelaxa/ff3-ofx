@@ -13,8 +13,8 @@ const h = vi.hoisted(() => ({
     savedPayload: undefined as unknown,
 }));
 
-vi.mock('node-ofx-parser', () => ({ parse: vi.fn() }));
-import * as OFXParser from 'node-ofx-parser';
+vi.mock('ofx-js', () => ({ parseStrict: vi.fn() }));
+import * as OFXParser from 'ofx-js';
 
 vi.mock('@/components/FileDrop', () => ({
     default: (props: { onChange: (files: File[]) => void }) => {
@@ -27,7 +27,7 @@ vi.mock('@/components/FileDrop', () => ({
 vi.mock('@/components/OfxTransactionsRow', () => ({
     default: (props: {
         index: number;
-        transaction: { description: string; importStatus?: { status?: string } };
+        transaction: { transactions: { description: string }[]; importStatus?: { status?: string } };
         importTransaction: (t: unknown) => void;
         onStartEdit: (i: number) => void;
         onSaved: (i: number, updated: unknown) => void;
@@ -36,7 +36,7 @@ vi.mock('@/components/OfxTransactionsRow', () => ({
     }) => (
         <tr data-testid={`row-${props.index}`}>
             <td>
-                <span data-testid={`row-desc-${props.index}`}>{props.transaction.description}</span>
+                <span data-testid={`row-desc-${props.index}`}>{props.transaction.transactions[0].description}</span>
                 <span data-testid={`row-status-${props.index}`}>{props.transaction.importStatus?.status ?? ''}</span>
                 <button data-testid={`start-edit-${props.index}`} onClick={() => props.onStartEdit(props.index)} />
                 <button data-testid={`import-${props.index}`} onClick={() => props.importTransaction(props.transaction)} />
@@ -81,7 +81,7 @@ const txnNode = (overrides: Record<string, string> = {}) => ({
     ...overrides,
 });
 
-// Builds the *raw* object node-ofx-parser would emit; the real Utils.getOfxData
+// Builds the *raw* object ofx-js would emit; the real Utils.getOfxData
 // then turns it into the OfxData the app consumes.
 const rawOfx = (opts: {
     acctId?: string;
@@ -143,7 +143,7 @@ const ffTxn = (over: Record<string, any> = {}) => ({
 }) as any;
 
 // Drop a file through the (mocked) FileDrop. Content is irrelevant because
-// OFXParser.parse is mocked; only that a File reaches FileReader matters.
+// OFXParser.parseStrict is mocked; only that a File reaches FileReader matters.
 const dropFile = async (name = 'statement.ofx') => {
     await waitFor(() => expect(h.onChange).toBeTypeOf('function'));
     const file = new File(['<OFX/>'], name, { type: 'application/x-ofx' });
@@ -204,7 +204,7 @@ describe('App — file drop validation', () => {
     it('shows a parse error when the OFX cannot be understood', async () => {
         vi.spyOn(console, 'error').mockImplementation(() => {});
         vi.spyOn(console, 'warn').mockImplementation(() => {});
-        asMock(OFXParser.parse).mockReturnValue({ OFX: { SIGNONMSGSRSV1: { SONRS: {} } } }); // no BANK/CC section -> Utils throws
+        asMock(OFXParser.parseStrict).mockReturnValue({ OFX: { SIGNONMSGSRSV1: { SONRS: {} } } }); // no BANK/CC section -> Utils throws
         await renderLoggedIn([acct('1', '1111-2222')]);
         await dropFile();
         expect(await screen.findByText(/format is not understood/i)).toBeInTheDocument();
@@ -213,7 +213,7 @@ describe('App — file drop validation', () => {
 
 describe('App — account matching', () => {
     it('processes transactions when an account matches exactly', async () => {
-        asMock(OFXParser.parse).mockReturnValue(rawOfx());
+        asMock(OFXParser.parseStrict).mockReturnValue(rawOfx());
         await renderLoggedIn([acct('1', '1111-2222')]);
         await dropFile();
         // The single transaction is imported and the row renders it.
@@ -228,14 +228,14 @@ describe('App — account matching', () => {
     });
 
     it('flags ERROR_NO_ACCOUNT_NO when the file has no account number', async () => {
-        asMock(OFXParser.parse).mockReturnValue(rawOfx({ acctId: '' }));
+        asMock(OFXParser.parseStrict).mockReturnValue(rawOfx({ acctId: '' }));
         await renderLoggedIn([acct('1', '1111-2222')]);
         await dropFile();
         expect(await screen.findByText(/does not include an account number/i)).toBeInTheDocument();
     });
 
     it('selects the only partially-matching account', async () => {
-        asMock(OFXParser.parse).mockReturnValue(rawOfx({ acctId: '****1234' }));
+        asMock(OFXParser.parseStrict).mockReturnValue(rawOfx({ acctId: '****1234' }));
         await renderLoggedIn([acct('1', '9999-1234')]);
         await dropFile();
         // Partial match of one -> straight to processing the transactions.
@@ -243,7 +243,7 @@ describe('App — account matching', () => {
     });
 
     it('asks the user to pick when multiple accounts partially match', async () => {
-        asMock(OFXParser.parse).mockReturnValue(rawOfx({ acctId: '****1234' }));
+        asMock(OFXParser.parseStrict).mockReturnValue(rawOfx({ acctId: '****1234' }));
         const a = acct('1', '9999-1234', 'Checking A');
         a.attributes.iban = 'DE89370400440532013000';
         a.attributes.bic = 'COBADEFFXXX';
@@ -260,14 +260,14 @@ describe('App — account matching', () => {
 
     it('reports ERROR_NO_TRANSACTIONS when the matched account is empty', async () => {
         vi.spyOn(console, 'warn').mockImplementation(() => {});
-        asMock(OFXParser.parse).mockReturnValue(rawOfx({ txns: [] }));
+        asMock(OFXParser.parseStrict).mockReturnValue(rawOfx({ txns: [] }));
         await renderLoggedIn([acct('1', '1111-2222')]);
         await dropFile();
         expect(await screen.findByText(/does not contain any transactions/i)).toBeInTheDocument();
     });
 
     it('offers to create an account when nothing matches', async () => {
-        asMock(OFXParser.parse).mockReturnValue(rawOfx({ acctId: '5555-6666' }));
+        asMock(OFXParser.parseStrict).mockReturnValue(rawOfx({ acctId: '5555-6666' }));
         await renderLoggedIn([acct('1', '9999-1234')]);
         await dropFile();
         expect(await screen.findByText(/No matching account found/i)).toBeInTheDocument();
@@ -277,7 +277,7 @@ describe('App — account matching', () => {
 
 describe('App — create account', () => {
     it('creates an account and proceeds to import', async () => {
-        asMock(OFXParser.parse).mockReturnValue(rawOfx({ acctId: '5555-6666', acctType: 'SAVINGS' }));
+        asMock(OFXParser.parseStrict).mockReturnValue(rawOfx({ acctId: '5555-6666', acctType: 'SAVINGS' }));
         asMock(ApiService.createAccount).mockResolvedValue(acct('77', '5555-6666', 'New Savings'));
         await renderLoggedIn([acct('1', '9999-1234')]);
         await dropFile();
@@ -290,7 +290,7 @@ describe('App — create account', () => {
     });
 
     it('shows an error when account creation fails', async () => {
-        asMock(OFXParser.parse).mockReturnValue(rawOfx({ acctId: '5555-6666' }));
+        asMock(OFXParser.parseStrict).mockReturnValue(rawOfx({ acctId: '5555-6666' }));
         asMock(ApiService.createAccount).mockResolvedValue(null);
         vi.spyOn(console, 'error').mockImplementation(() => {});
         await renderLoggedIn([acct('1', '9999-1234')]);
@@ -302,7 +302,7 @@ describe('App — create account', () => {
 
 describe('App — multi-account files', () => {
     it('renders the OFX summary and processes the next account on selection', async () => {
-        asMock(OFXParser.parse).mockReturnValue(rawMultiAccount());
+        asMock(OFXParser.parseStrict).mockReturnValue(rawMultiAccount());
         await renderLoggedIn([acct('1', 'AAAA'), acct('2', 'BBBB')]);
         await dropFile();
         // First account (AAAA) matches and processes.
@@ -325,7 +325,7 @@ describe('App — token bootstrap edge cases', () => {
 
 describe('App — transaction outcomes', () => {
     it('marks a transaction failed when the API rejects it', async () => {
-        asMock(OFXParser.parse).mockReturnValue(rawOfx());
+        asMock(OFXParser.parseStrict).mockReturnValue(rawOfx());
         asMock(ApiService.addTransaction).mockResolvedValue({ message: 'Duplicate', errors: { description: ['dup'] } });
         await renderLoggedIn([acct('1', '1111-2222')]);
         await dropFile();
@@ -333,7 +333,7 @@ describe('App — transaction outcomes', () => {
     });
 
     it('marks an amount-only match as MATCH_VALUE', async () => {
-        asMock(OFXParser.parse).mockReturnValue(rawOfx());
+        asMock(OFXParser.parseStrict).mockReturnValue(rawOfx());
         asMock(ApiService.getAccountTransactions).mockResolvedValue([
             ffTxn({ external_id: 'OTHER', internal_reference: null, source_id: '1', destination_id: 'X', description: 'Different', amount: '12.34' }),
         ]);
@@ -345,7 +345,7 @@ describe('App — transaction outcomes', () => {
 
 describe('App — matched transactions and add-anyways', () => {
     it('marks an exact match and lets the user import it anyway', async () => {
-        asMock(OFXParser.parse).mockReturnValue(rawOfx());
+        asMock(OFXParser.parseStrict).mockReturnValue(rawOfx());
         asMock(ApiService.getAccountTransactions).mockResolvedValue([ffTxn()]);
         await renderLoggedIn([acct('1', '1111-2222')]);
         await dropFile();
@@ -361,7 +361,7 @@ describe('App — matched transactions and add-anyways', () => {
 
 describe('App — edit flow', () => {
     const setup = async () => {
-        asMock(OFXParser.parse).mockReturnValue(rawOfx());
+        asMock(OFXParser.parseStrict).mockReturnValue(rawOfx());
         await renderLoggedIn([acct('1', '1111-2222')]);
         await dropFile();
         await screen.findByTestId('row-0');
@@ -434,7 +434,7 @@ describe('App — edit flow', () => {
 
 describe('App — import another file', () => {
     it('resets back to the drop zone after processing', async () => {
-        asMock(OFXParser.parse).mockReturnValue(rawOfx());
+        asMock(OFXParser.parseStrict).mockReturnValue(rawOfx());
         await renderLoggedIn([acct('1', '1111-2222')]);
         await dropFile();
         const another = await screen.findByRole('button', { name: /Import another file/i });

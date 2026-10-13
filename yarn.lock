@@ -4215,17 +4215,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"fast-xml-parser@npm:^3.18.0":
-  version: 3.21.1
-  resolution: "fast-xml-parser@npm:3.21.1"
-  dependencies:
-    strnum: "npm:^1.0.4"
-  bin:
-    xml2js: cli.js
-  checksum: 10c0/26ed57fd3cb86434959cffa6852ab63231850ff5be6836aef7744b1abc8013fa5696c05179e422965677e116606611242d91ceebf246d91a5247e262d8b59996
-  languageName: node
-  linkType: hard
-
 "fb-watchman@npm:^2.0.2":
   version: 2.0.2
   resolution: "fb-watchman@npm:2.0.2"
@@ -4293,7 +4282,7 @@ __metadata:
     jsdom: "npm:^29.1.1"
     moment: "npm:^2.30.1"
     mui-file-dropzone: "npm:^4.0.2"
-    node-ofx-parser: "npm:^0.5.1"
+    ofx-js: "npm:^1.1.1"
     react: "npm:^19.2.6"
     react-dom: "npm:^19.2.6"
     typescript: "npm:^5.7"
@@ -6070,15 +6059,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"node-ofx-parser@npm:^0.5.1":
-  version: 0.5.1
-  resolution: "node-ofx-parser@npm:0.5.1"
-  dependencies:
-    fast-xml-parser: "npm:^3.18.0"
-  checksum: 10c0/96a8427bdc3895c03e928341d572ff2eb26a7389fa92b6fe250d0a63dc1d178fbff3f4dff94cf5bddf5a28ead8e109b0c79ecba47152295a69a4df77a0e5dd91
-  languageName: node
-  linkType: hard
-
 "node-releases@npm:^2.0.36":
   version: 2.0.38
   resolution: "node-releases@npm:2.0.38"
@@ -6124,6 +6104,13 @@ __metadata:
   version: 2.1.1
   resolution: "obug@npm:2.1.1"
   checksum: 10c0/59dccd7de72a047e08f8649e94c1015ec72f94eefb6ddb57fb4812c4b425a813bc7e7cd30c9aca20db3c59abc3c85cc7a62bb656a968741d770f4e8e02bc2e78
+  languageName: node
+  linkType: hard
+
+"ofx-js@npm:^1.1.1":
+  version: 1.1.1
+  resolution: "ofx-js@npm:1.1.1"
+  checksum: 10c0/3e06cf67c3b0e1b43490f7f233f62dcdae1e42c6d3c9743b9f94c95a94273783f47c9048adbd9bce3a3b33ffcb28962cd90eb6c9a393a4e94d406727ba57da0e
   languageName: node
   linkType: hard
 
@@ -7027,13 +7014,6 @@ __metadata:
   version: 3.1.1
   resolution: "strip-json-comments@npm:3.1.1"
   checksum: 10c0/9681a6257b925a7fa0f285851c0e613cc934a50661fa7bb41ca9cbbff89686bb4a0ee366e6ecedc4daafd01e83eee0720111ab294366fe7c185e935475ebcecd
-  languageName: node
-  linkType: hard
-
-"strnum@npm:^1.0.4":
-  version: 1.1.2
-  resolution: "strnum@npm:1.1.2"
-  checksum: 10c0/a0fce2498fa3c64ce64a40dada41beb91cabe3caefa910e467dc0518ef2ebd7e4d10f8c2202a6104f1410254cae245066c0e94e2521fb4061a5cb41831952392
   languageName: node
   linkType: hard
 

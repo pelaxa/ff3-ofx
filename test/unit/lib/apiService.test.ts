@@ -23,6 +23,7 @@ const categoriesListCategory = vi.fn();
 const budgetsListBudget = vi.fn();
 const billsListBill = vi.fn();
 const tagsListTag = vi.fn();
+const searchTransactionsSpy = vi.fn();
 
 vi.mock('@billos/firefly-iii-sdk', () => ({
     AccountsService: {
@@ -41,6 +42,7 @@ vi.mock('@billos/firefly-iii-sdk', () => ({
     BudgetsService: { listBudget: (...args: unknown[]) => budgetsListBudget(...args) },
     BillsService: { listBill: (...args: unknown[]) => billsListBill(...args) },
     TagsService: { listTag: (...args: unknown[]) => tagsListTag(...args) },
+    SearchService: { searchTransactions: (...args: unknown[]) => searchTransactionsSpy(...args) },
     AccountRoleProperty: {
         DEFAULT_ASSET: 'defaultAsset',
         SAVING_ASSET: 'savingAsset',
@@ -86,6 +88,7 @@ beforeEach(() => {
     budgetsListBudget.mockReset();
     billsListBill.mockReset();
     tagsListTag.mockReset();
+    searchTransactionsSpy.mockReset();
     axiosGet.mockReset();
 });
 
@@ -224,6 +227,81 @@ describe('transaction queries', () => {
 
     it('getTransactions returns [] when there is no client', async () => {
         expect(await ApiService.getTransactions()).toEqual([]);
+    });
+});
+
+describe('listTransactionsPage', () => {
+    it('returns an empty envelope when there is no client', async () => {
+        expect(await ApiService.listTransactionsPage(1)).toEqual({ data: [], currentPage: 1, totalPages: 0 });
+    });
+
+    it('uses the account endpoint with type + date range when accountId is given', async () => {
+        ApiService.getClient('tok');
+        accountsListTxnByAccount.mockResolvedValueOnce({
+            data: { data: [{ id: 'a' }], meta: { pagination: { current_page: 2, total_pages: 5 } } },
+            error: undefined,
+            response: { status: 200 } as Response,
+        });
+        const out = await ApiService.listTransactionsPage(2, {
+            accountId: '42',
+            start: moment('2024-01-01'),
+            end: moment('2024-01-31'),
+            type: 'withdrawal',
+        });
+        expect(out).toEqual({ data: [{ id: 'a' }], currentPage: 2, totalPages: 5 });
+        const call = accountsListTxnByAccount.mock.calls[0][0];
+        expect(call.path).toEqual({ id: '42' });
+        expect(call.query).toEqual(expect.objectContaining({ page: 2, start: '2024-01-01', end: '2024-01-31', type: 'withdrawal' }));
+    });
+
+    it('uses the global endpoint and defaults pagination meta when accountId is absent', async () => {
+        ApiService.getClient('tok');
+        txnsListTransaction.mockResolvedValueOnce({
+            data: { data: [{ id: 'x' }], meta: undefined },
+            error: undefined,
+            response: { status: 200 } as Response,
+        });
+        const out = await ApiService.listTransactionsPage(1);
+        expect(out).toEqual({ data: [{ id: 'x' }], currentPage: 1, totalPages: 1 });
+        expect(txnsListTransaction).toHaveBeenCalled();
+        expect(accountsListTxnByAccount).not.toHaveBeenCalled();
+    });
+
+    it('throws with the account endpoint label on error', async () => {
+        ApiService.getClient('tok');
+        accountsListTxnByAccount.mockResolvedValueOnce({ data: undefined, error: { message: 'boom' }, response: { status: 500 } as Response });
+        await expect(ApiService.listTransactionsPage(1, { accountId: '7' })).rejects.toThrow(/accounts\/7\/transactions 500/);
+    });
+});
+
+describe('searchTransactionsPage', () => {
+    it('returns an empty envelope when there is no client', async () => {
+        expect(await ApiService.searchTransactionsPage(1, 'coffee')).toEqual({ data: [], currentPage: 1, totalPages: 0 });
+    });
+
+    it('returns an empty envelope for a blank query (no request made)', async () => {
+        ApiService.getClient('tok');
+        const out = await ApiService.searchTransactionsPage(3, '   ');
+        expect(out).toEqual({ data: [], currentPage: 3, totalPages: 0 });
+        expect(searchTransactionsSpy).not.toHaveBeenCalled();
+    });
+
+    it('passes the query and paginates on success', async () => {
+        ApiService.getClient('tok');
+        searchTransactionsSpy.mockResolvedValueOnce({
+            data: { data: [{ id: 's1' }], meta: { pagination: { current_page: 1, total_pages: 3 } } },
+            error: undefined,
+            response: { status: 200 } as Response,
+        });
+        const out = await ApiService.searchTransactionsPage(1, 'has_any_category:false');
+        expect(out).toEqual({ data: [{ id: 's1' }], currentPage: 1, totalPages: 3 });
+        expect(searchTransactionsSpy.mock.calls[0][0].query).toEqual(expect.objectContaining({ page: 1, query: 'has_any_category:false' }));
+    });
+
+    it('throws on error', async () => {
+        ApiService.getClient('tok');
+        searchTransactionsSpy.mockResolvedValueOnce({ data: undefined, error: { message: 'nope' }, response: { status: 500 } as Response });
+        await expect(ApiService.searchTransactionsPage(1, 'x')).rejects.toThrow(/search\/transactions 500/);
     });
 });
 

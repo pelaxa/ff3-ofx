@@ -221,10 +221,22 @@ const TransactionEditor = (props: TransactionEditorProps) => {
     return (
         <Box sx={{
             p: '20px 24px',
+            m: '8px 6px',
             backgroundColor: tokens.bgSunken,
             display: 'grid',
             gridTemplateColumns: '1fr 1fr',
             gap: '14px 20px',
+            // ── Make the editor prominent when it expands out of a row ──────────
+            position: 'relative',
+            border: '2px solid',
+            borderColor: 'primary.light',
+            borderRadius: 2,
+            boxShadow: '0 12px 32px rgba(0,0,0,.55)',
+            '@keyframes editorReveal': {
+                from: { opacity: 0, transform: 'translateY(-6px)' },
+                to: { opacity: 1, transform: 'translateY(0)' },
+            },
+            animation: 'editorReveal .18s ease-out'
         }}>
             <Box sx={{ ...fieldFull, display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', mb: '4px' }}>
                 <Typography sx={sectionLabel}>Edit Transaction</Typography>

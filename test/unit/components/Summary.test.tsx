@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, act } from '@testing-library/react';
 import Summary from '@/components/Summary';
 import ApiService from '@/lib/apiService';
 import { AccountRoleProperty, type AccountRead } from '@billos/firefly-iii-sdk';
@@ -69,5 +69,47 @@ describe('Summary', () => {
         );
         render(<Summary bankBalance={0} processed={true} progress={0} />);
         await waitFor(() => expect(ApiService.getAccount).toHaveBeenCalledWith('0'));
+    });
+
+    it('fetches the account again each time progress changes, so the balance keeps up with added transactions', async () => {
+        const getAccount = ApiService.getAccount as ReturnType<typeof vi.fn>;
+        getAccount.mockResolvedValue(mkAccount());
+        const { rerender } = render(<Summary bankBalance={500} accountId="7" processed={false} progress={0} />);
+        await waitFor(() => expect(getAccount).toHaveBeenCalledTimes(1));
+        getAccount.mockResolvedValue(mkAccount({ current_balance: '490.00' }));
+        rerender(<Summary bankBalance={500} accountId="7" processed={false} progress={50} />);
+        await waitFor(() => expect(getAccount).toHaveBeenCalledTimes(2));
+        await waitFor(() => expect(screen.getByText('490.00')).toBeInTheDocument());
+    });
+
+    it('ignores a slow older response that arrives after a newer one', async () => {
+        const getAccount = ApiService.getAccount as ReturnType<typeof vi.fn>;
+        let releaseOld: (a: AccountRead) => void = () => {};
+        getAccount.mockReturnValueOnce(new Promise<AccountRead>((resolve) => { releaseOld = resolve; }));
+        const { rerender } = render(<Summary bankBalance={500} accountId="7" processed={true} progress={0} />);
+        getAccount.mockResolvedValueOnce(mkAccount({ current_balance: '500.00' }));
+        rerender(<Summary bankBalance={500} accountId="7" processed={true} progress={1} />);
+        await waitFor(() => expect(screen.getByText(/Checking/)).toBeInTheDocument());
+        await act(async () => { releaseOld(mkAccount({ current_balance: '100.00' })); });
+        expect(screen.queryByText(/bank balance does not match/i)).not.toBeInTheDocument();
+    });
+
+    it('shows no warning when a credit card with a virtual balance matches the bank', async () => {
+        // 25000 limit, 5000 charged: the bank reports -5000 owed and FireFly's current_balance (limit included) is 20000
+        (ApiService.getAccount as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+            mkAccount({ account_role: AccountRoleProperty.CC_ASSET, virtual_balance: '25000', current_balance: '20000' }),
+        );
+        render(<Summary bankBalance={-5000} accountId="7" processed={true} progress={100} />);
+        await waitFor(() => expect(screen.getByText(/Checking/)).toBeInTheDocument());
+        expect(screen.queryByText(/bank balance does not match/i)).not.toBeInTheDocument();
+        expect(screen.getAllByText(/20[,.\s\u00a0]?000[.,]00/).length).toBeGreaterThan(0);
+    });
+
+    it('warns when a credit card with a virtual balance does not match the bank', async () => {
+        (ApiService.getAccount as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+            mkAccount({ account_role: AccountRoleProperty.CC_ASSET, virtual_balance: '25000', current_balance: '21000' }),
+        );
+        render(<Summary bankBalance={-5000} accountId="7" processed={true} progress={100} />);
+        await waitFor(() => expect(screen.getByText(/bank balance does not match/i)).toBeInTheDocument());
     });
 });

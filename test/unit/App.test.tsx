@@ -77,10 +77,9 @@ describe('App — login screen', () => {
 
     it('shows the step indicator with all four labels', async () => {
         render(<App />);
-        expect(await screen.findByText(/1 · Login/)).toBeInTheDocument();
-        expect(screen.getByText(/2 · Import/)).toBeInTheDocument();
-        expect(screen.getByText(/3 · Processing/)).toBeInTheDocument();
-        expect(screen.getByText(/4 · Done/)).toBeInTheDocument();
+        expect(await screen.findByText(/Connect to FireFly III/)).toBeInTheDocument();
+        expect(screen.getByText(/Remember token for next time/)).toBeInTheDocument();
+        expect(screen.getByText(/Login/)).toBeInTheDocument();
     });
 });
 
