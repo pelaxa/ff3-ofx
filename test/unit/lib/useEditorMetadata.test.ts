@@ -50,5 +50,18 @@ describe('useEditorMetadata', () => {
         await act(async () => { await result.current.ensureEditorMetadata(); });
         expect(result.current.editorMetadata).toBeUndefined();
         expect(err).toHaveBeenCalled();
+        expect(result.current.metadataError).toBe('boom');
+        expect(result.current.metadataLoading).toBe(false);
+    });
+
+    it('clears the error and loads when ensure is called again after a failure', async () => {
+        vi.spyOn(console, 'error').mockImplementation(() => {});
+        vi.mocked(ApiService.listTags).mockRejectedValueOnce(new Error('boom'));
+        const { result } = renderHook(() => useEditorMetadata());
+        await act(async () => { await result.current.ensureEditorMetadata(); });
+        expect(result.current.metadataError).toBe('boom');
+        await act(async () => { await result.current.ensureEditorMetadata(); });
+        expect(result.current.metadataError).toBeUndefined();
+        expect(result.current.editorMetadata?.tags).toEqual(['known']);
     });
 });

@@ -131,3 +131,24 @@ export interface EditorMetadata {
 // and storing a new one. Functions receive these as a parameter instead of calling
 // ApiService directly, so the matching logic works with any source of transactions.
 export type ImportStore = Pick<typeof ApiService, 'getAccountTransactions' | 'addTransaction'>;
+
+// The fields the Transactions tab search can filter on
+export type SearchField = 'description' | 'category' | 'tag' | 'notes' | 'amount';
+
+// How an amount filter compares: exactly the value, more than it, or less than it
+export type AmountComparison = 'is' | 'more' | 'less';
+
+// One search filter, shown as a chip in the search box
+export interface SearchFilter {
+    field: SearchField;
+    // Only set for the amount field
+    comparison?: AmountComparison;
+    // What to look for. For category and tag this is the exact name picked from FireFly III
+    value: string;
+}
+
+// One entry in the menu of fields offered when the search box is focused
+export interface SearchFieldOption {
+    field: SearchField;
+    label: string;
+}

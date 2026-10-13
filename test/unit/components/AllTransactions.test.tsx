@@ -151,19 +151,253 @@ describe('AllTransactions — quick filters (server side)', () => {
     });
 });
 
-describe('AllTransactions — search (Enter to execute)', () => {
-    it('does not query while typing and searches on Enter', async () => {
+describe('AllTransactions — filtered search', () => {
+    type User = ReturnType<typeof userEvent.setup>;
+    const lastQuery = () => asMock(ApiService.searchTransactionsPage).mock.calls.at(-1)![1] as string;
+    // The text box inside the search bar
+    const bar = () => screen.getByRole('combobox', { name: 'Search filters' }) as HTMLInputElement;
+    const option = (name: string | RegExp) => screen.findByRole('option', { name });
+    const token = (name: string) => screen.getByRole('group', { name });
+    // Open the menu, pick a field, and type a value followed by Enter
+    const addTyped = async (user: User, field: string, text: string) => {
+        await user.click(bar());
+        await user.click(await option(field));
+        await user.type(bar(), `${text}{Enter}`);
+    };
+    const renderLoaded = async () => {
         const user = userEvent.setup();
         render(<AllTransactions />);
         await screen.findByText('Txn 1');
-        const field = screen.getByPlaceholderText(/Search description/i);
-        await user.type(field, 'coffee');
-        // No search call fired just from typing.
+        return user;
+    };
+
+    it('lists the fields as soon as the box is focused, without searching', async () => {
+        const user = await renderLoaded();
+        await user.click(bar());
+        for (const label of ['Description', 'Category', 'Tag', 'Notes', 'Amount']) {
+            expect(await option(label)).toBeInTheDocument();
+        }
         expect(ApiService.searchTransactionsPage).not.toHaveBeenCalled();
-        await user.type(field, '{Enter}');
-        await waitFor(() => expect(ApiService.searchTransactionsPage).toHaveBeenCalled());
-        const q = asMock(ApiService.searchTransactionsPage).mock.calls.at(-1)![1] as string;
-        expect(q).toContain('coffee');
+    });
+
+    it('does not accept typed text until a field has been chosen', async () => {
+        const user = await renderLoaded();
+        await user.click(bar());
+        await user.type(bar(), 'coffee');
+        expect(bar()).toHaveValue('');
+        // The menu still lists every field, and Enter does not create a filter
+        for (const label of ['Description', 'Category', 'Tag', 'Notes', 'Amount']) {
+            expect(await option(label)).toBeInTheDocument();
+        }
+        await user.keyboard('{Enter}');
+        expect(screen.queryByRole('group', { name: /contains|=/ })).not.toBeInTheDocument();
+    });
+
+    it('does not accept typed text while an amount operator is still to be chosen, but does for the value', async () => {
+        const user = await renderLoaded();
+        await user.click(bar());
+        await user.click(await option('Amount'));
+        await user.type(bar(), '50');
+        expect(bar()).toHaveValue('');
+        await user.click(await option(/more than/));
+        await user.type(bar(), '50');
+        expect(bar()).toHaveValue('50');
+    });
+
+    it('builds a three-segment token for a description and searches once Enter is pressed', async () => {
+        const user = await renderLoaded();
+        await user.click(bar());
+        await user.click(await option('Description'));
+        // The chosen field shows as a segment while the value is typed
+        expect(screen.getByRole('group', { name: /Description filter being added/ })).toBeInTheDocument();
+        await user.type(bar(), 'coffee shop');
+        expect(ApiService.searchTransactionsPage).not.toHaveBeenCalled();
+        await user.keyboard('{Enter}');
+        const t = await screen.findByRole('group', { name: 'Description contains coffee shop' });
+        expect(t).toHaveTextContent('Description');
+        expect(t).toHaveTextContent('contains');
+        expect(t).toHaveTextContent('coffee shop');
+        await waitFor(() => expect(lastQuery()).toContain('description_contains:"coffee shop"'));
+    });
+
+    it('removes a field from the menu once it is used', async () => {
+        const user = await renderLoaded();
+        await addTyped(user, 'Notes', 'x');
+        await screen.findByRole('group', { name: 'Notes contains x' });
+        await user.click(bar());
+        expect(await option('Description')).toBeInTheDocument();
+        expect(screen.queryByRole('option', { name: 'Notes' })).not.toBeInTheDocument();
+    });
+
+    it('ANDs several tokens and the x on a token removes just that one', async () => {
+        const user = await renderLoaded();
+        await addTyped(user, 'Description', 'coffee');
+        await addTyped(user, 'Notes', 'latte');
+        await screen.findByRole('group', { name: 'Notes contains latte' });
+        await waitFor(() => expect(lastQuery()).toContain('notes_contains:"latte"'));
+        expect(lastQuery()).toContain('description_contains:"coffee"');
+
+        await user.click(screen.getByRole('button', { name: 'Remove Description contains coffee' }));
+        await waitFor(() => expect(screen.queryByRole('group', { name: 'Description contains coffee' })).not.toBeInTheDocument());
+        await waitFor(() => expect(lastQuery()).not.toContain('description_contains'));
+        expect(lastQuery()).toContain('notes_contains:"latte"');
+    });
+
+    it('goes back to the plain list when the last token is removed', async () => {
+        const user = await renderLoaded();
+        await addTyped(user, 'Notes', 'x');
+        await screen.findByRole('group', { name: 'Notes contains x' });
+        const listCalls = asMock(ApiService.listTransactionsPage).mock.calls.length;
+        await user.click(screen.getByRole('button', { name: 'Remove Notes contains x' }));
+        await waitFor(() => expect(asMock(ApiService.listTransactionsPage).mock.calls.length).toBeGreaterThan(listCalls));
+    });
+
+    it('offers only existing categories, narrows them as you type, and Enter picks the first match', async () => {
+        asMock(ApiService.listCategories).mockResolvedValue([{ id: '1', attributes: { name: 'Food' } }, { id: '2', attributes: { name: 'Rent' } }]);
+        const user = await renderLoaded();
+        await user.click(bar());
+        await user.click(await option('Category'));
+        expect(await option('Food')).toBeInTheDocument();
+        expect(await option('Rent')).toBeInTheDocument();
+        // Text that is not an existing category never becomes a filter
+        await user.type(bar(), 'Nope{Enter}');
+        expect(screen.getByText('No matches')).toBeInTheDocument();
+        expect(screen.queryByRole('group', { name: /^Category =/ })).not.toBeInTheDocument();
+        await user.clear(bar());
+        await user.type(bar(), 're');
+        expect(screen.queryByRole('option', { name: 'Food' })).not.toBeInTheDocument();
+        await user.keyboard('{Enter}');
+        await screen.findByRole('group', { name: 'Category = Rent' });
+        await waitFor(() => expect(lastQuery()).toContain('category_is:"Rent"'));
+    });
+
+    it('lets a tag be picked by clicking it', async () => {
+        asMock(ApiService.listTags).mockResolvedValue(['holiday', 'work']);
+        const user = await renderLoaded();
+        await user.click(bar());
+        await user.click(await option('Tag'));
+        await user.click(await option('work'));
+        await screen.findByRole('group', { name: 'Tag = work' });
+        await waitFor(() => expect(lastQuery()).toContain('tag_is:"work"'));
+    });
+
+    it('shows an error when the categories and tags cannot be loaded', async () => {
+        vi.spyOn(console, 'error').mockImplementation(() => {});
+        asMock(ApiService.listCategories).mockRejectedValue(new Error('boom'));
+        const user = await renderLoaded();
+        await user.click(bar());
+        expect(await screen.findByText(/Could not load the categories and tags from FireFly III: boom/)).toBeInTheDocument();
+        await user.click(await option('Category'));
+        expect(await screen.findByText('Could not load the list')).toBeInTheDocument();
+    });
+
+    it('asks for an amount operator, rejects text that is not a number, and builds the token', async () => {
+        const user = await renderLoaded();
+        await user.click(bar());
+        await user.click(await option('Amount'));
+        await user.click(await option(/more than/));
+        expect(screen.getByRole('group', { name: /Amount filter being added/ })).toHaveTextContent('>');
+        await user.type(bar(), 'abc{Enter}');
+        expect(await screen.findByText('Enter a number such as 12.34')).toBeInTheDocument();
+        await user.clear(bar());
+        await user.type(bar(), '12,5{Enter}');
+        await screen.findByRole('group', { name: 'Amount > 12.5' });
+        await waitFor(() => expect(lastQuery()).toContain('amount_more:12.5'));
+    });
+
+    it('allows an amount range, but nothing more once both ends are used', async () => {
+        const user = await renderLoaded();
+        await user.click(bar());
+        await user.click(await option('Amount'));
+        await user.click(await option(/more than/));
+        await user.type(bar(), '10{Enter}');
+        await screen.findByRole('group', { name: 'Amount > 10' });
+
+        // Amount is still offered, but only the comparisons not used yet
+        await user.click(bar());
+        await user.click(await option('Amount'));
+        expect(screen.queryByRole('option', { name: /more than/ })).not.toBeInTheDocument();
+        expect(screen.queryByRole('option', { name: /exactly/ })).not.toBeInTheDocument();
+        await user.click(await option(/less than/));
+        await user.type(bar(), '50{Enter}');
+        await screen.findByRole('group', { name: 'Amount < 50' });
+        await waitFor(() => expect(lastQuery()).toMatch(/amount_more:10.*amount_less:50/));
+
+        await user.click(bar());
+        expect(await option('Description')).toBeInTheDocument();
+        expect(screen.queryByRole('option', { name: 'Amount' })).not.toBeInTheDocument();
+    });
+
+    it('combines the tokens with the quick filters', async () => {
+        const user = await renderLoaded();
+        await addTyped(user, 'Notes', 'x');
+        await screen.findByRole('group', { name: 'Notes contains x' });
+        fireEvent.click(screen.getByText('Uncategorized'));
+        await waitFor(() => expect(lastQuery()).toContain('has_any_category:false'));
+        expect(lastQuery()).toContain('notes_contains:"x"');
+    });
+
+    it('Enter in the empty box and the search button both reload the results', async () => {
+        const user = await renderLoaded();
+        const before = asMock(ApiService.listTransactionsPage).mock.calls.length;
+        await user.click(bar());
+        await user.keyboard('{Enter}');
+        await waitFor(() => expect(asMock(ApiService.listTransactionsPage).mock.calls.length).toBeGreaterThan(before));
+        const afterEnter = asMock(ApiService.listTransactionsPage).mock.calls.length;
+        await user.click(screen.getByRole('button', { name: 'Search' }));
+        await waitFor(() => expect(asMock(ApiService.listTransactionsPage).mock.calls.length).toBeGreaterThan(afterEnter));
+    });
+
+    it('Backspace deletes the token to the left of the caret, and Delete the one to its right', async () => {
+        const user = await renderLoaded();
+        await addTyped(user, 'Description', 'one');
+        await addTyped(user, 'Notes', 'two');
+        await screen.findByRole('group', { name: 'Notes contains two' });
+
+        // Caret is after the last token: Backspace removes the last one
+        await user.click(bar());
+        await user.keyboard('{Backspace}');
+        await waitFor(() => expect(screen.queryByRole('group', { name: 'Notes contains two' })).not.toBeInTheDocument());
+        expect(token('Description contains one')).toBeInTheDocument();
+
+        // Add another, then walk left past it and delete the earlier token without touching the later one
+        await addTyped(user, 'Notes', 'three');
+        await screen.findByRole('group', { name: 'Notes contains three' });
+        await user.keyboard('{ArrowLeft}{ArrowLeft}');
+        await user.keyboard('{Delete}');
+        await waitFor(() => expect(screen.queryByRole('group', { name: 'Description contains one' })).not.toBeInTheDocument());
+        expect(token('Notes contains three')).toBeInTheDocument();
+
+        // Caret is now before the only token: Backspace has nothing to its left
+        await user.keyboard('{Backspace}');
+        expect(token('Notes contains three')).toBeInTheDocument();
+    });
+
+    it('Backspace on a half-built token steps back and Escape cancels it', async () => {
+        const user = await renderLoaded();
+        await user.click(bar());
+        await user.click(await option('Amount'));
+        await user.click(await option(/less than/));
+        expect(screen.getByRole('group', { name: /Amount filter being added/ })).toHaveTextContent('<');
+        await user.keyboard('{Backspace}');
+        expect(screen.getByRole('group', { name: /Amount filter being added/ })).not.toHaveTextContent('<');
+        await user.keyboard('{Backspace}');
+        expect(screen.queryByRole('group', { name: /filter being added/ })).not.toBeInTheDocument();
+
+        await user.click(await option('Notes'));
+        expect(screen.getByRole('group', { name: /Notes filter being added/ })).toBeInTheDocument();
+        await user.keyboard('{Escape}');
+        expect(screen.queryByRole('group', { name: /filter being added/ })).not.toBeInTheDocument();
+    });
+
+    it('the clear button removes every token at once', async () => {
+        const user = await renderLoaded();
+        await addTyped(user, 'Description', 'one');
+        await addTyped(user, 'Notes', 'two');
+        await screen.findByRole('group', { name: 'Notes contains two' });
+        await user.click(screen.getByRole('button', { name: 'Clear all filters' }));
+        expect(screen.queryByRole('group', { name: /contains/ })).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Clear all filters' })).not.toBeInTheDocument();
     });
 });
 

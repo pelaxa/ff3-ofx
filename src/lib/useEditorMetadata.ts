@@ -90,17 +90,21 @@ export const mergeCreatedEntities = (meta: EditorMetadata, updated: TransactionR
  * Holds the editor's autocomplete data (accounts, categories, budgets, bills, tags).
  * It is fetched the first time an editor is opened, then kept so later edits reuse it.
  * Both the Import and Transactions tabs use this so they behave the same way.
- * @returns editorMetadata (undefined until loaded), ensureEditorMetadata() to load it, and
- *          mergeSavedTransaction(updated) to add what a save created
+ * @returns editorMetadata (undefined until loaded), ensureEditorMetadata() to load it (a failed load can be
+ *          retried by calling it again), mergeSavedTransaction(updated) to add what a save created,
+ *          metadataLoading while a load is running, and metadataError with the message of the last failed load
  */
 export const useEditorMetadata = () => {
     const [editorMetadata, setEditorMetadata] = useState<EditorMetadata>();
     const [metadataLoading, setMetadataLoading] = useState(false);
+    // The message of the last failed load, cleared when a new load starts
+    const [metadataError, setMetadataError] = useState<string>();
 
     // Loads the metadata unless we already have it or a load is already in progress
     const ensureEditorMetadata = useCallback(async () => {
         if (editorMetadata || metadataLoading) return;
         setMetadataLoading(true);
+        setMetadataError(undefined);
         try {
             const [allAccounts, categories, budgets, bills, tags] = await Promise.all([
                 ApiService.listAllAccounts(),
@@ -112,6 +116,7 @@ export const useEditorMetadata = () => {
             setEditorMetadata({ accounts: allAccounts, categories, budgets, bills, tags });
         } catch (e) {
             console.error('Failed to load editor metadata', e);
+            setMetadataError((e as Error).message);
         } finally {
             setMetadataLoading(false);
         }
@@ -125,5 +130,5 @@ export const useEditorMetadata = () => {
         setEditorMetadata((meta) => (meta ? mergeCreatedEntities(meta, updated) : meta));
     }, []);
 
-    return { editorMetadata, ensureEditorMetadata, mergeSavedTransaction };
+    return { editorMetadata, ensureEditorMetadata, mergeSavedTransaction, metadataLoading, metadataError };
 };

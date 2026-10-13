@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     Alert,
     Autocomplete,
@@ -33,7 +33,9 @@ import { tokens } from '@/theme';
 import TransactionTypeIcon from '@/components/TransactionTypeIcon';
 import TransactionEditor from '@/components/TransactionEditor';
 import { useEditorMetadata } from '@/lib/useEditorMetadata';
-import type { EditorMetadata } from '@/lib/interfaces';
+import type { EditorMetadata, SearchFilter } from '@/lib/interfaces';
+import { searchFilterToQuery } from '@/lib/searchFilters';
+import SearchFilterInput from '@/components/SearchFilterInput';
 
 interface AllTransactionsProps {
     // Asset accounts used to populate the account filter dropdown.
@@ -195,13 +197,13 @@ const AllTransactions = (props: AllTransactionsProps) => {
     const [accountId, setAccountId] = useState<string | undefined>();
     const [range, setRange] = useState<DateRange | undefined>('30d');
     const [quickFilter, setQuickFilter] = useState<QuickFilter>('all');
-    // `searchInput` is the live field value; `search` is the committed term that
-    // actually drives the query (only updated when the user presses Enter).
-    const [searchInput, setSearchInput] = useState('');
-    const [search, setSearch] = useState('');
+    // The filters from the search box. They are ANDed together and drive the query.
+    const [searchFilters, setSearchFilters] = useState<SearchFilter[]>([]);
 
     const [editingId, setEditingId] = useState<string | undefined>();
-    const { editorMetadata, ensureEditorMetadata, mergeSavedTransaction } = useEditorMetadata();
+    const { editorMetadata, ensureEditorMetadata, mergeSavedTransaction, metadataLoading, metadataError } = useEditorMetadata();
+    // The names the search box offers for the category and tag filters
+    const categoryOptions = useMemo(() => (editorMetadata?.categories ?? []).map((c) => c.attributes.name), [editorMetadata]);
 
     const scrollerRef = useRef<HTMLDivElement | null>(null);
     // Guards against the scroll handler firing a second fetch before state settles.
@@ -217,15 +219,15 @@ const AllTransactions = (props: AllTransactionsProps) => {
             const { start, end } = quickFilter === 'thismonth'
                 ? { start: moment().startOf('month'), end: moment().endOf('month') }
                 : rangeToDates(range);
-            const term = search.trim();
-            // The search endpoint is required for free-text and for filters that
-            // can only be expressed with search operators (uncategorized/untagged).
-            const useSearch = !!term || quickFilter === 'uncategorized' || quickFilter === 'untagged';
+            const searchParts = searchFilters.map(searchFilterToQuery);
+            // The search endpoint is required for the search box filters and for quick filters
+            // that can only be expressed with search operators (uncategorized/untagged).
+            const useSearch = searchParts.length > 0 || quickFilter === 'uncategorized' || quickFilter === 'untagged';
 
             let result;
             if (useSearch) {
                 const parts: string[] = [];
-                if (term) parts.push(term);
+                parts.push(...searchParts);
                 if (quickFilter === 'uncategorized') parts.push('has_any_category:false');
                 if (quickFilter === 'untagged') parts.push('has_any_tag:false');
                 if (quickFilter === 'withdrawals') parts.push('type:withdrawal');
@@ -256,7 +258,7 @@ const AllTransactions = (props: AllTransactionsProps) => {
             setLoading(false);
             loadingRef.current = false;
         }
-    }, [accountId, range, quickFilter, search]);
+    }, [accountId, range, quickFilter, searchFilters]);
 
     const getAccountEntries = () => {
         if (props.accounts) {
@@ -265,8 +267,8 @@ const AllTransactions = (props: AllTransactionsProps) => {
         return [{id: 'dummy', label: 'No accounts'}];
     }
 
-    // Reset and reload whenever any server-side filter changes. `search` only
-    // changes when the user commits it with Enter, so typing does not refetch.
+    // Reset and reload whenever any server-side filter changes. A search filter only
+    // changes when a chip is added or removed, so typing in the search box does not refetch.
     useEffect(() => {
         setRows([]);
         setPage(0);
@@ -274,7 +276,7 @@ const AllTransactions = (props: AllTransactionsProps) => {
         if (scrollerRef.current) scrollerRef.current.scrollTop = 0;
         loadPage(1, true);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [accountId, range, quickFilter, search]);
+    }, [accountId, range, quickFilter, searchFilters]);
 
     const handleScroll = useCallback(() => {
         const el = scrollerRef.current;
@@ -350,23 +352,15 @@ const AllTransactions = (props: AllTransactionsProps) => {
                     onChange={(_, v) => setRange(v?.id)}
                     renderInput={(params) => <TextField {...params} label='Date range' variant='outlined' />}
                 />
-                <TextField
-                    size="medium"
-                    variant="outlined"
-                    placeholder="Search description, category, tag… (press Enter)"
-                    value={searchInput}
-                    onChange={(e) => setSearchInput(e.target.value)}
-                    onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                            e.preventDefault();
-                            // Commit the term — this refetches via the reset effect.
-                            // If unchanged, force a reload so Enter always re-queries.
-                            const term = searchInput.trim();
-                            if (term === search) loadPage(1, true);
-                            else setSearch(term);
-                        }
-                    }}
-                    sx={{ flex: 1, minWidth: 200 }}
+                <SearchFilterInput
+                    filters={searchFilters}
+                    onChange={setSearchFilters}
+                    categories={categoryOptions}
+                    tags={editorMetadata?.tags ?? []}
+                    loading={metadataLoading}
+                    loadError={metadataError}
+                    onFocus={ensureEditorMetadata}
+                    onSubmitEmpty={() => loadPage(1, true)}
                 />
                 <Button variant="outlined" startIcon={<RefreshIcon />} onClick={() => loadPage(1, true)} disabled={loading}>
                     Refresh
@@ -374,6 +368,11 @@ const AllTransactions = (props: AllTransactionsProps) => {
             </Stack>
 
             {error && <Alert severity="error" sx={{ mb: 1, flexShrink: 0 }}>{error}</Alert>}
+            {metadataError && (
+                <Alert severity="error" sx={{ mb: 1, flexShrink: 0 }}>
+                    Could not load the categories and tags from FireFly III: {metadataError}. Click the search box again to retry.
+                </Alert>
+            )}
 
             {/* Table fills the rest of the height; only this scrolls. */}
             <TableContainer
